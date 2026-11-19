@@ -1,0 +1,14 @@
+# Payment folder URL rewriting (cPanel / Apache compatible)
+# The SPA opens payment entry points like /pay/watchpays?a=1 or /pay/qwackpays?a=1
+RewriteEngine On
+
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.php -f
+RewriteRule ^(.*)$ $1.php [NC,L]
+
+SetEnv TZ Asia/Kolkata
+
+# 404 inside pay -> user panel home (payment flows start from the SPA)
+ErrorDocument 404 /index.html
+
+Options -Indexes

@@ -1,0 +1,13 @@
+# API folder URL rewriting (cPanel / Apache compatible)
+# The SPA calls extension-less endpoints like /apifolder/api/webapi/Login
+RewriteEngine On
+
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.php -f
+RewriteRule ^(.*)$ $1.php [NC,L]
+
+SetEnv TZ Asia/Kolkata
+
+ErrorDocument 404 /index.html
+
+Options -Indexes

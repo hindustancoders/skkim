@@ -1,0 +1,84 @@
+================================================================
+BHARAT GAMES - cPanel DEPLOYMENT GUIDE
+================================================================
+
+WHAT'S IN THIS PACKAGE
+- Complete PHP website + admin panel (no Node.js required)
+- No portable MySQL / no sandbox files - only production code
+- Import the SQL dump separately (bhar42501_SQL_full_dump.sql)
+
+----------------------------------------------------------------
+STEP 1: UPLOAD CODE
+----------------------------------------------------------------
+1. cPanel -> File Manager -> public_html
+2. Upload bharatgames_cpanel_code.zip -> Extract into public_html
+   (zip root = site files: index.html, conn.php, admin/, pay/, apifolder/...)
+
+----------------------------------------------------------------
+STEP 2: CREATE DATABASE
+----------------------------------------------------------------
+1. cPanel -> MySQL Databases
+2. Database name: bhar42501_SQL   (must match exactly)
+3. User: bhar42501_SQL  Password: BharatG7_Kx9mQ2vL
+4. Grant ALL PRIVILEGES on the database to the user
+5. cPanel -> phpMyAdmin -> select database -> Import ->
+   upload bhar42501_SQL_full_dump.sql -> Go
+   (dump has no CREATE DATABASE/USE: it imports into the DB you select)
+
+If your cPanel forces a prefix (e.g. bhar42501_SQL already correct here),
+update the same 4 values in these connection files if changed:
+   conn.php, serive/samparka.php, apifolder/conn.php, admin/conn.php,
+   gyrox/conn.php, pay files that create cron DB connections (cron_master.php)
+
+----------------------------------------------------------------
+STEP 3: PHP VERSION
+----------------------------------------------------------------
+cPanel -> MultiPHP Manager -> select domain -> PHP 8.1 or newer
+Required extensions (default enabled on most hosts):
+mysqli, curl, mbstring, openssl, json, fileinfo
+
+----------------------------------------------------------------
+STEP 4: CRON JOBS (games ke results ke liye ZARURI)
+----------------------------------------------------------------
+cPanel -> Cron Jobs -> Common Settings: Once Per Minute ->
+
+php /home/YOUR_CPANEL_USER/public_html/cron_master.php >/dev/null 2>&1
+
+This master cron handles ALL games (WinGo 30s/1m/3m/5m/10m, 5D, K3,
+TRX WinGo) + gateway payout status sync + daily resets.
+
+----------------------------------------------------------------
+STEP 5: URLS AND LOGINS
+----------------------------------------------------------------
+Website      : https://your-domain.com/
+Admin panel  : https://your-domain.com/admin/
+Admin user   : 1234567890
+Admin pass   : admin123        (change it: Admin > Finance > adminpass.php)
+
+Payment gateways (Admin > Finance):
+- WatchPay Accounts : multi-account payin/payout (api.watchglb.com)
+- QwackPay Accounts : multi-account payin/payout (qwackpay.com)
+  * Merchant ID 636055076 already added
+  * Paste the API Key from the QwackPay merchant portal (Google-verified)
+    into the account -> Save. Deposit channel goes live instantly.
+  * PAYOUT needs your server IP whitelisted in the QwackPay merchant portal
+    (Security settings) BEFORE calling payout API.
+- Callbacks (already implemented, no setup needed):
+  /pay/qwackpay_callback.php         (payin webhook  - replies "success")
+  /pay/qwackpay_payout_callback.php  (payout webhook - replies "success")
+  /pay/watchpays_callback.php        (payin webhook  - replies "success")
+  /pay/watchpays_payout_callback.php (payout webhook - replies "success")
+
+----------------------------------------------------------------
+STEP 6: FIRST USER = ADMIN (rules)
+----------------------------------------------------------------
+- The FIRST registered website user is the app's root/admin user.
+- Admin panel is separate: /admin/ (login above).
+
+----------------------------------------------------------------
+SECURITY NOTES
+----------------------------------------------------------------
+- admin/.htaccess redirects 404s to the admin login (not the user site).
+- Session test files (sess_test*.php) were removed.
+- Delete watchpays.log / qwackpay.log periodically (auto-created in /pay).
+- Force HTTPS in cPanel (Force HTTPS Redirect) - recommended.

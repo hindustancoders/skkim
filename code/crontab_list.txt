@@ -1,0 +1,93 @@
+========================================================================
+BHARAT GAMES (SIKKIM V1) - CRON JOB SETUP GUIDE
+Domain: https://bharatgames.online/
+Database: bhar42501_SQL
+========================================================================
+
+------------------------------------------------------------------------
+OPTION 1: MASTER CRON (HIGHLY RECOMMENDED - EASIEST & ALL-IN-ONE)
+------------------------------------------------------------------------
+In your cPanel -> Cron Jobs, add just ONE cron job running every minute (* * * * *):
+
+Command:
+* * * * * php /home/USERNAME/public_html/cron_master.php >/dev/null 2>&1
+
+(Replace /home/USERNAME/public_html with your actual server document root path)
+
+What this master cron handles automatically:
+- WinGo 1 Min (every minute)
+- 5D Lottery 1 Min (every minute)
+- K3 Lottery 1 Min (every minute)
+- TRX WinGo 1 Min (every minute)
+- WinGo 30 Sec (runs every 30 seconds)
+- WinGo 3 Min, 5D 3 Min, K3 3 Min, TRX 3 Min (every 3 minutes)
+- WinGo 5 Min, 5D 5 Min, K3 5 Min, TRX 5 Min (every 5 minutes)
+- WinGo 10 Min, 5D 10 Min, K3 10 Min, TRX 10 Min (every 10 minutes)
+- Agent Daily Salary & Spin Reset (daily at midnight 00:00)
+
+OR via Web Cron (e.g., cron-job.org or curl):
+curl -s "https://bharatgames.online/cron_master.php?key=bharatgames_cron_2026" >/dev/null 2>&1
+
+
+------------------------------------------------------------------------
+OPTION 2: INDIVIDUAL CRON JOBS (IF SETTING UP SEPARATELY)
+------------------------------------------------------------------------
+If you prefer configuring separate cron lines in cPanel:
+
+1. WinGo 30 Seconds:
+* * * * * php /home/USERNAME/public_html/niyamitakelasa30sec.php >/dev/null 2>&1
+* * * * * (sleep 30; php /home/USERNAME/public_html/niyamitakelasa30sec.php) >/dev/null 2>&1
+
+2. WinGo 1 Minute:
+* * * * * php /home/USERNAME/public_html/niyamitakelasa.php >/dev/null 2>&1
+
+3. WinGo 3 Minutes:
+*/3 * * * * php /home/USERNAME/public_html/niyamitakelasa_drei.php >/dev/null 2>&1
+
+4. WinGo 5 Minutes:
+*/5 * * * * php /home/USERNAME/public_html/niyamitakelasa_funf.php >/dev/null 2>&1
+
+5. WinGo 10 Minutes:
+*/10 * * * * php /home/USERNAME/public_html/niyamitakelasa_zehn.php >/dev/null 2>&1
+
+6. 5D Lottery 1 Minute:
+* * * * * php /home/USERNAME/public_html/niyamitakelasa_aidudi.php >/dev/null 2>&1
+
+7. 5D Lottery 3 Minutes:
+*/3 * * * * php /home/USERNAME/public_html/niyamitakelasa_aidudi_drei.php >/dev/null 2>&1
+
+8. 5D Lottery 5 Minutes:
+*/5 * * * * php /home/USERNAME/public_html/niyamitakelasa_aidudi_funf.php >/dev/null 2>&1
+
+9. 5D Lottery 10 Minutes:
+*/10 * * * * php /home/USERNAME/public_html/niyamitakelasa_aidudi_zehn.php >/dev/null 2>&1
+
+10. K3 Lottery 1 Minute:
+* * * * * php /home/USERNAME/public_html/niyamitakelasa_kemuru.php >/dev/null 2>&1
+
+11. K3 Lottery 3 Minutes:
+*/3 * * * * php /home/USERNAME/public_html/niyamitakelasa_kemuru_drei.php >/dev/null 2>&1
+
+12. K3 Lottery 5 Minutes:
+*/5 * * * * php /home/USERNAME/public_html/niyamitakelasa_kemuru_funf.php >/dev/null 2>&1
+
+13. K3 Lottery 10 Minutes:
+*/10 * * * * php /home/USERNAME/public_html/niyamitakelasa_kemuru_zehn.php >/dev/null 2>&1
+
+14. TRX WinGo 1 Minute:
+* * * * * php /home/USERNAME/public_html/ktrx.php >/dev/null 2>&1
+
+15. TRX WinGo 3 Minutes:
+*/3 * * * * php /home/USERNAME/public_html/ktrx3.php >/dev/null 2>&1
+
+16. TRX WinGo 5 Minutes:
+*/5 * * * * php /home/USERNAME/public_html/ktrx5.php >/dev/null 2>&1
+
+17. TRX WinGo 10 Minutes:
+*/10 * * * * php /home/USERNAME/public_html/ktrx10.php >/dev/null 2>&1
+
+18. Daily Agent Salary (Run once every day at 00:00 midnight):
+0 0 * * * php /home/USERNAME/public_html/atcron.php >/dev/null 2>&1
+
+19. Daily Spin Reset (Run once every day at 00:00 midnight):
+0 0 * * * php /home/USERNAME/public_html/clear_spin.php >/dev/null 2>&1

@@ -1,0 +1,92 @@
+[2025-02-12 15:44:20] Successfully processed ID: 21, User: 2, Amount: 500.00
+[2025-02-12 15:44:20] Cron completed. Processed: 1, Failed: 0
+[2025-02-12 15:44:30] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 15:46:53] Successfully processed ID: 22, User: 3, Amount: 4.00
+[2025-02-12 15:46:53] Cron completed. Processed: 1, Failed: 0
+[2025-02-12 15:47:34] Successfully processed ID: 23, User: 3, Amount: 50000.00
+[2025-02-12 15:47:34] Cron completed. Processed: 1, Failed: 0
+[2025-02-12 15:52:11] Successfully processed ID: 24, User: 3, Amount: 50000.00
+[2025-02-12 15:52:11] Cron completed. Processed: 1, Failed: 0
+[2025-02-12 15:52:21] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:14] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:16] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:17] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:28] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:30] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:31] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:32] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:32] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:33] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:34] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:34] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:35] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:36] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:37] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:10:37] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:21:15] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:38:51] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:39:45] Successfully processed ID: 25, User: 6, Amount: 500.00
+[2025-02-12 16:39:45] Cron completed. Processed: 1, Failed: 0
+[2025-02-12 16:47:36] Successfully processed ID: 26, User: 1555, Amount: 500.00
+[2025-02-12 16:47:36] Cron completed. Processed: 1, Failed: 0
+[2025-02-12 16:48:31] Successfully processed ID: 27, User: 1555, Amount: 500.00
+[2025-02-12 16:48:31] Cron completed. Processed: 1, Failed: 0
+[2025-02-12 16:48:33] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:48:34] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:48:35] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:48:35] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:52:41] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 16:57:39] Successfully processed ID: 28, User: 29, Amount: 500.00
+[2025-02-12 16:57:39] Cron completed. Processed: 1, Failed: 0
+[2025-02-12 17:00:13] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:00:14] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:00:20] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:00:21] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:00:22] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:00:22] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:00:22] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:00:22] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:00:22] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:00:22] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:00:49] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:00:52] Successfully processed ID: 7, User: 29, Amount: 500.00
+[2025-02-12 17:00:52] Cron completed. Processed: 1, Failed: 0
+[2025-02-12 17:03:12] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:03:13] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:03:14] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:03:14] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:03:34] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:03:35] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:03:36] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:03:37] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:03:40] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:03:41] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:03:44] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:03:44] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:04:47] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:05:37] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:05:38] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:05:39] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:05:39] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:05:39] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:05:40] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:05:40] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:05:40] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:05:40] Critical Error: Unknown column 'id' in 'field list'
+[2025-02-12 17:09:13] Successfully processed KANI: 851, User: 29, Amount: 300
+[2025-02-12 17:09:13] Cron completed. Processed: 1, Failed: 0
+[2025-02-12 17:12:02] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:12:05] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:12:31] Successfully processed ID: 1, User: 29, Amount: 200.00
+[2025-02-12 17:12:31] Cron completed. Processed: 1, Failed: 0
+[2025-02-12 17:16:04] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:16:38] Successfully processed ID: 1, User: 29, Amount: 100.00
+[2025-02-12 17:16:38] Cron completed. Processed: 1, Failed: 0
+[2025-02-12 17:23:30] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:23:36] Cron completed. Processed: 0, Failed: 0
+[2025-02-12 17:23:54] Successfully processed ID: 1, User: 29, Amount: 500.00
+[2025-02-12 17:23:54] Cron completed. Processed: 1, Failed: 0
+[2026-11-18 12:42:00] Critical Error: Table 'bhar42501_SQL.agent_red_envelope_recharge_table' doesn't exist
+[2026-11-18 12:47:36] Critical Error: Table 'bhar42501_SQL.agent_red_envelope_recharge_table' doesn't exist
+[2026-11-18 12:54:05] Cron completed. Processed: 0, Failed: 0
+[2026-11-18 12:58:46] Cron completed. Processed: 0, Failed: 0

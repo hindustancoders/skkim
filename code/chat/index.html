@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Customer Support - Bharat Games</title>
+<link rel="icon" href="/favico.ico">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  body { background: #0b1023; color: #fff; height: 100vh; display: flex; flex-direction: column; }
+  .header {
+    background: linear-gradient(135deg, #14308f 0%, #0b1e5e 100%);
+    padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.4); position: relative;
+  }
+  .header .crown { width: 34px; height: 34px; }
+  .header .title { font-size: 16px; font-weight: 700; }
+  .header .subtitle { font-size: 11px; color: #9db4ff; }
+  .header a.back { color: #fff; text-decoration: none; font-size: 22px; line-height: 1; padding-right: 4px; }
+  .online { width: 9px; height: 9px; background: #2ecc71; border-radius: 50%; display: inline-block; margin-right: 4px; }
+  #chatBox { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 78%; padding: 9px 12px; border-radius: 14px; font-size: 14px; line-height: 1.45; word-break: break-word; }
+  .msg.admin { background: #1e2b52; color: #e8ecff; align-self: flex-start; border-top-left-radius: 4px; }
+  .msg.user { background: linear-gradient(135deg, #2979ff, #1565c0); color: #fff; align-self: flex-end; border-top-right-radius: 4px; }
+  .msg.deleted { background: #1a2140; color: #6f7ba3; font-style: italic; align-self: flex-start; }
+  .meta { font-size: 10px; color: #64719f; margin-top: 3px; }
+  .msg.user .meta { color: #bcd0ff; text-align: right; }
+  .sys { align-self: center; font-size: 11px; color: #6f7ba3; background: #131a36; padding: 6px 12px; border-radius: 20px; }
+  .typing { align-self: flex-start; color: #6f7ba3; font-size: 12px; padding: 4px 10px; }
+  .footer { padding: 10px; background: #101735; display: flex; gap: 8px; border-top: 1px solid #1c2752; }
+  .footer input {
+    flex: 1; background: #1a2350; border: 1px solid #2b3a7d; color: #fff;
+    border-radius: 22px; padding: 12px 16px; font-size: 14px; outline: none;
+  }
+  .footer input::placeholder { color: #5f6ca1; }
+  .footer button {
+    background: linear-gradient(135deg, #f9b234, #f9a11b); color: #14308f; border: none;
+    border-radius: 22px; padding: 0 22px; font-weight: 700; font-size: 14px; cursor: pointer;
+  }
+  .footer button:disabled { opacity: .5; }
+  .login-warn { margin: auto; text-align: center; color: #8ea0d6; font-size: 14px; padding: 30px; }
+  .login-warn a { color: #2979ff; }
+</style>
+</head>
+<body>
+<div class="header">
+  <a class="back" href="/#/">&#8592;</a>
+  <svg class="crown" viewBox="0 0 64 64"><path fill="#f9b234" d="M8 44h48l4 12H4L8 44zm-2-6L2 16l14 8 16-18 16 18 14-8-4 22H6z"/></svg>
+  <div>
+    <div class="title">Customer Support</div>
+    <div class="subtitle"><span class="online"></span>Chat with BHARAT admin team</div>
+  </div>
+</div>
+
+<div id="chatBox"></div>
+<div class="footer" id="footerBar" style="display:none;">
+  <input id="msgInput" type="text" placeholder="Type a message..." maxlength="2000">
+  <button id="sendBtn">Send</button>
+</div>
+<div class="login-warn" id="loginWarn" style="display:none;">
+  Please log in to chat with support.<br><br>
+  <a href="/#/login">Go to Login</a>
+</div>
+
+<script>
+(function () {
+  var token = null;
+  try { token = localStorage.getItem('token'); } catch (e) { token = null; }
+  var box = document.getElementById('chatBox');
+  var footerBar = document.getElementById('footerBar');
+  var loginWarn = document.getElementById('loginWarn');
+  var input = document.getElementById('msgInput');
+  var sendBtn = document.getElementById('sendBtn');
+  var lastMsgId = 0;
+
+  if (!token) {
+    loginWarn.style.display = 'block';
+    return;
+  }
+  footerBar.style.display = 'flex';
+
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+  function addMsg(m, animate) {
+    var wrap = document.createElement('div');
+    var cls = m.deleted ? 'msg deleted' : ('msg ' + m.sender);
+    wrap.className = cls;
+    if (m.deleted) {
+      wrap.textContent = '[message deleted by admin]';
+    } else {
+      wrap.innerHTML = esc(m.message);
+    }
+    var meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = m.createdAt;
+    wrap.appendChild(meta);
+    box.appendChild(wrap);
+    box.scrollTop = box.scrollHeight;
+    if (m.id) lastMsgId = Math.max(lastMsgId, m.id);
+  }
+
+  function loadHistory(initial) {
+    fetch('/apifolder/api/webapi/SupportChat.php?action=history', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'history', limit: 100 })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d.code !== 0) { box.innerHTML = '<div class="login-warn">' + esc(d.msg || 'Not logged in') + '</div>'; return; }
+      if (initial) {
+        box.innerHTML = '';
+        var sys = document.createElement('div');
+        sys.className = 'sys';
+        sys.textContent = 'Welcome! Reply time is usually within a few minutes. Messages stay private between you and the admin team.';
+        box.appendChild(sys);
+        (d.data || []).forEach(function (m) { addMsg(m, false); });
+        if ((d.data || []).length === 0) {
+          var t = document.createElement('div');
+          t.className = 'typing';
+          t.textContent = 'Admin team: Namaste! How can we help you today?';
+          box.appendChild(t);
+        }
+        box.scrollTop = box.scrollHeight;
+      } else {
+        var fresh = (d.data || []).filter(function (m) { return m.id > lastMsgId; });
+        fresh.forEach(function (m) { addMsg(m, true); });
+      }
+    })
+    .catch(function () {});
+  }
+
+  function send() {
+    var text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    sendBtn.disabled = true;
+    fetch('/apifolder/api/webapi/SupportChat.php?action=send', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'send', message: text })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function () { loadHistory(false); sendBtn.disabled = false; input.focus(); })
+    .catch(function () { sendBtn.disabled = false; });
+  }
+
+  sendBtn.addEventListener('click', send);
+  input.addEventListener('keydown', function (e) { if (e.key === 'Enter') send(); });
+
+  loadHistory(true);
+  setInterval(function () { loadHistory(false); }, 5000);
+})();
+</script>
+</body>
+</html>

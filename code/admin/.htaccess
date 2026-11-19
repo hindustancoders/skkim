@@ -1,0 +1,16 @@
+# Admin panel URL rewriting (cPanel / Apache compatible)
+RewriteEngine On
+
+# Rewrite extension-less requests to PHP files (e.g. /admin/dashboard -> dashboard.php)
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.php -f
+RewriteRule ^(.*)$ $1.php [NC,L]
+
+# Set the server timezone
+SetEnv TZ Asia/Kolkata
+
+# 404 inside admin -> admin login (NOT the user panel home)
+ErrorDocument 404 /admin/index.php
+
+# Disable directory listing
+Options -Indexes
