@@ -3,18 +3,20 @@
     include("nayakaphalitansa_mulaka_unohs30.php");
 
     /* =========================================================
-     * WinGo 30 Sec — wall-clock aligned period generation
-     * Period id: YYYYMMDD + 10004 + 4-digit serial (1..2880)
-     * serial = floor(seconds_of_day / 30) + 1  (1-based slot)
+     * WinGo 30 Sec — API issueNumber scheme (UTC aligned)
+     * Period id: UTC YYYYMMDD + 10005 + 4-digit serial (1..2880)
+     * serial = floor(seconds_of_UTC_day / 30) + 1  (1-based slot)
+     * Same numbering as the external API (30S code = 5), e.g.
+     * 20261119100051701 -> next slot 20261119100051702 (+1 each 30s)
      * Idempotent: current slot row is created once, duplicates
      * avoided via GET_LOCK + equality check.
      * ========================================================= */
     $tarika = date('Y-m-d H:i:s');
-    $dinank = date('Ymd');
-    $secsToday = intval(date('H')) * 3600 + intval(date('i')) * 60 + intval(date('s'));
-    $serial = intval(floor($secsToday / 30)) + 1;
+    $dinank = gmdate('Ymd');   // UTC date (API issueNumber date part)
+    $secsUtc = intval(gmdate('H')) * 3600 + intval(gmdate('i')) * 60 + intval(gmdate('s'));
+    $serial = intval(floor($secsUtc / 30)) + 1;
     if ($serial > 2880) $serial = 2880;
-    $expected = $dinank . "10004" . sprintf("%04d", $serial);
+    $expected = $dinank . "10005" . sprintf("%04d", $serial);
 
     // serialise creation across processes
     $lockOk = mysqli_query($conn, "SELECT GET_LOCK('wingo30_period', 3) AS l");

@@ -46,10 +46,15 @@ if ($fetch['ok'] && count($fetch['candidates']) > 0) {
     $number = $latest['number'];
     $colour = $latest['colour'];
     if ($localPeriod !== '-' && $apiPeriod !== null) {
-        $ourSerial = wingo_api_serial_of($localPeriod);
-        $apiSerial = wingo_api_serial_of($apiPeriod);
-        if ($ourSerial !== null && $apiSerial !== null) {
-            $match = ($ourSerial === $apiSerial) ? 'yes' : 'no';
+        // ids follow the same scheme now -> exact string match first
+        if (strcasecmp(strval($localPeriod), strval($apiPeriod)) === 0) {
+            $match = 'yes';
+        } else {
+            $ourSerial = wingo_api_serial_of($localPeriod);
+            $apiSerial = wingo_api_serial_of($apiPeriod);
+            if ($ourSerial !== null && $apiSerial !== null) {
+                $match = ($ourSerial === $apiSerial) ? 'yes' : 'no';
+            }
         }
     }
 }
@@ -58,6 +63,8 @@ echo json_encode([
     'ok'           => (bool) $fetch['ok'],
     'error'        => $fetch['error'],
     'latency_ms'   => $fetch['latency_ms'],
+    'path_used'    => isset($fetch['path_used']) ? $fetch['path_used'] : null,
+    'url_used'     => isset($fetch['url_used']) ? $fetch['url_used'] : null,
     'api_period'   => $apiPeriod,
     'number'       => $number,
     'colour'       => $colour,

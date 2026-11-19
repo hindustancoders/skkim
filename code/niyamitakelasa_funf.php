@@ -3,14 +3,15 @@
     include("nayakaphalitansa_mulaka_unohs_funf.php");
 
     /* =========================================================
-     * WinGo 5 Min — wall-clock aligned period generation
-     * Period id: YYYYMMDD + 10003 + 4-digit serial (1..288)
-     * serial = floor(seconds_of_day / 300) + 1  (1-based slot)
+     * WinGo 5 Min — API issueNumber scheme (UTC aligned)
+     * Period id: UTC YYYYMMDD + 10003 + 4-digit serial (1..288)
+     * serial = floor(seconds_of_UTC_day / 300) + 1  (1-based slot)
+     * Same numbering as the external API (5M code = 3)
      * ========================================================= */
     $tarika = date('Y-m-d H:i:s');
-    $dinank = date('Ymd');
-    $secsToday = intval(date('H')) * 3600 + intval(date('i')) * 60 + intval(date('s'));
-    $serial = intval(floor($secsToday / 300)) + 1;
+    $dinank = gmdate('Ymd');   // UTC date (API issueNumber date part)
+    $secsUtc = intval(gmdate('H')) * 3600 + intval(gmdate('i')) * 60 + intval(gmdate('s'));
+    $serial = intval(floor($secsUtc / 300)) + 1;
     if ($serial > 288) $serial = 288;
     $expected = $dinank . "10003" . sprintf("%04d", $serial);
 

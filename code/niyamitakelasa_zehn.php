@@ -3,16 +3,18 @@
     include("nayakaphalitansa_mulaka_unohs_zehn.php");
 
     /* =========================================================
-     * WinGo 10 Min — wall-clock aligned period generation
-     * Period id: YYYYMMDD + 10005 + 4-digit serial (1..144)
-     * serial = floor(seconds_of_day / 600) + 1  (1-based slot)
+     * WinGo 10 Min — local IST scheme (no external API endpoint)
+     * Period id: IST YYYYMMDD + 10004 + 4-digit serial (1..144)
+     * serial = floor(seconds_of_IST_day / 600) + 1  (1-based slot)
+     * (prefix 10005 now belongs to the 30s API scheme, so 10m
+     *  uses the free 10004 prefix to avoid id collisions)
      * ========================================================= */
     $tarika = date('Y-m-d H:i:s');
     $dinank = date('Ymd');
     $secsToday = intval(date('H')) * 3600 + intval(date('i')) * 60 + intval(date('s'));
     $serial = intval(floor($secsToday / 600)) + 1;
     if ($serial > 144) $serial = 144;
-    $expected = $dinank . "10005" . sprintf("%04d", $serial);
+    $expected = $dinank . "10004" . sprintf("%04d", $serial);
 
     $lockOk = mysqli_query($conn, "SELECT GET_LOCK('wingo10min_period', 3) AS l");
     $lockRow = $lockOk ? mysqli_fetch_assoc($lockOk) : null;

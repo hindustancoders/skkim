@@ -2,7 +2,7 @@
         if (php_sapi_name() !== 'cli') { http_response_code(403); exit; } 
         include_once(__DIR__ . "/wingo_api_lib.php");
         // === WINGO UPGRADE: resolve the earliest unresolved period whose betting window has ended ===
-        $__wingo_target = wingo_api_due_target($conn, 'wingo_periods_10min', 'wingo_results_10min', 600, 'wingo10m');
+        $__wingo_target = wingo_api_due_target($conn, 'wingo_periods_10min', 'wingo_results_10min', 600, 'wingo10m', '10m');
         if ($__wingo_target === null) { return; }
         $samasyesreni = array('atadaaidi' => $__wingo_target);
         
@@ -70,6 +70,10 @@
                                 }
                         }                                       
                         
+                        // safety net: guarantee a valid 0-9 number even if API/algorithm paths fail
+                        if (!isset($kadimesucyanka) || $kadimesucyanka === null || strval($kadimesucyanka) === '') { $kadimesucyanka = rand(0, 9); }
+                        $kadimesucyanka = intval($kadimesucyanka);
+                        if ($kadimesucyanka < 0 || $kadimesucyanka > 9) { $kadimesucyanka = rand(0, 9); }
                         if($kadimesucyanka == 0){
                                 $banna = 'red,violet';
                         }
@@ -588,6 +592,7 @@
                 }
                 else{
                         // === WINGO API INTEGRATION (no-bets branch): admin manual > API feed > random ===
+                        $yadrcchika = rand(0, 9); // fallback: keeps settlement alive when API is unreachable
                         $__wingoManualRes = mysqli_query($conn, "SELECT sankhye FROM `wingo_manual_result_10min` WHERE sthiti = '1' LIMIT 1");
                         if ($__wingoManualRes && mysqli_num_rows($__wingoManualRes) == 1) {
                                 $__wingoManualRow = mysqli_fetch_assoc($__wingoManualRes);

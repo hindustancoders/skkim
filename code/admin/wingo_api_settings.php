@@ -28,6 +28,10 @@
                 $p3m  = strtoupper(trim($_POST['param_3m']) ?: '3M');
                 $p5m  = strtoupper(trim($_POST['param_5m']) ?: '5M');
                 $p10m = strtoupper(trim($_POST['param_10m']) ?: '10M');
+                $proxyTpls = '';
+                if (isset($_POST['proxy_tpls'])) {
+                        $proxyTpls = implode("\n", array_filter(array_map('trim', explode("\n", str_replace("\r", "", $_POST['proxy_tpls'])))));
+                }
 
                 $up = mysqli_query($conn, "UPDATE `wingo_api_config` SET
                         `enabled`=" . intval($enabled) . ",
@@ -43,7 +47,8 @@
                         `param_1m`='" . mysqli_real_escape_string($conn, $p1m) . "',
                         `param_3m`='" . mysqli_real_escape_string($conn, $p3m) . "',
                         `param_5m`='" . mysqli_real_escape_string($conn, $p5m) . "',
-                        `param_10m`='" . mysqli_real_escape_string($conn, $p10m) . "'
+                        `param_10m`='" . mysqli_real_escape_string($conn, $p10m) . "',
+                        `proxy_tpls`='" . mysqli_real_escape_string($conn, $proxyTpls) . "'
                         WHERE `id`=1");
                 $saveMsg = $up ? "Settings saved successfully." : "Save failed: " . mysqli_error($conn);
                 $cfg = wingo_api_get_config($conn);
@@ -59,6 +64,9 @@
                 $r = mysqli_query($conn, "SELECT atadaaidi FROM `" . $tbl . "` ORDER BY kramasankhye DESC LIMIT 1");
                 $localPeriods[$gk] = ($r && mysqli_num_rows($r) > 0) ? mysqli_fetch_assoc($r)['atadaaidi'] : '-';
         }
+
+        $proxyVal = isset($cfg['proxy_tpls']) ? strval($cfg['proxy_tpls']) : implode("\n", wingo_api_default_proxies());
+        $lgPath = intval(isset($cfg['last_good_path']) ? $cfg['last_good_path'] : 0);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -156,6 +164,14 @@
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
                   <label style="font-size:1rem"><input type="checkbox" name="enabled" <?php if(intval($cfg['enabled'])===1) echo 'checked'; ?>> &nbsp;<b>API feed enabled (global)</b></label>
+                </div>
+              </div>
+
+              <h5 class="mt-4">Proxy fallback <span style="font-size:.75rem;color:#888">(used automatically when the API blocks direct server calls, one per line; {URL} = full API url, {URL_ENC} = urlencoded)</span></h5>
+              <div class="row">
+                <div class="col-md-12">
+                  <textarea class="form-ctrl" name="proxy_tpls" rows="4" style="font-family:monospace;font-size:.8rem"><?php echo htmlspecialchars($proxyVal); ?></textarea>
+                  <div style="color:#888;font-size:.8rem;margin-top:4px">Last successful path: <b><?php echo $lgPath === 0 ? 'direct' : 'proxy #' . $lgPath; ?></b></div>
                 </div>
               </div>
 

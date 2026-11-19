@@ -1,0 +1,44 @@
+-- ============================================================
+--  WinGo External API Integration v2 — one-time migration notes
+--  (run statements manually, only if needed)
+-- ============================================================
+
+-- 1) Config table columns (proxy chain + last-good path) are
+--    created automatically by wingo_api_lib.php on first run.
+--    Nothing to do here.
+
+-- 2) OPTIONAL cleanup — only needed if you deploy DURING the day
+--    (before 05:30 IST) and want zero skipped slots.
+--
+--    WHY: old period ids used IST-based serials with prefixes
+--    10001 (1m) / 10002 (3m) / 10003 (5m). The new API scheme
+--    uses UTC-based serials with the SAME prefixes. Until the
+--    UTC serial passes today's highest old IST serial (or the
+--    UTC date rolls over at 05:30 IST), old result rows with the
+--    same ids would make the cron think those periods are already
+--    settled, so those slots get skipped.
+--
+--    Replace the cutoff datetime with your deploy time. This
+--    removes today's pre-deploy result rows for the three games
+--    (bets stay settled and paid; only history rows are removed):
+--
+-- DELETE FROM wingo_results_1min
+--  WHERE kalaparichaya LIKE '2026111910001%'
+--    AND dinankavannuracisi < '2026-11-19 20:06:00';
+-- DELETE FROM wingo_results_3min
+--  WHERE kalaparichaya LIKE '2026111910002%'
+--    AND dinankavannuracisi < '2026-11-19 20:06:00';
+-- DELETE FROM wingo_results_5min
+--  WHERE kalaparichaya LIKE '2026111910003%'
+--    AND dinankavannuracisi < '2026-11-19 20:06:00';
+--
+--    The 30 Sec game changed prefix (10004 -> 10005) and the 10 Min
+--    game moved to prefix 10004, so they never collide — no cleanup
+--    needed for those two.
+
+-- 3) After deploying, check admin panel -> WinGo API Settings:
+--    - "Test 30S / 1M / 3M / 5M" buttons hit the live API directly
+--      (plus the proxy fallback chain if the server IP is blocked).
+--    - The activity log shows: used = API result applied,
+--      manual = admin prediction applied, fallback = auto algorithm.
+-- ============================================================
