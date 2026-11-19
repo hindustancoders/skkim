@@ -1,37 +1,47 @@
 <?php 
-	include("serive/samparka.php");
-	include("nayakaphalitansa_mulaka_unohs_funf.php");
-	
-	$prathama = date('Ymd')."10003".sprintf("%04d",1);
-	$sesa = $lastperiodid=date('Ymd')."10003".sprintf("%04d",288);
-	
-	$ajitarika = date('Ymd');
-	$ghanta = date('H');
-	$nimisa = $ghanta*60;
-	$bartamannimisa = date('i');
-	$bartamankalasankhya = ceil(($nimisa+$bartamannimisa) / 5);
-	
-	$bartamankalakrama = $ajitarika ."10003". sprintf("%04d", $bartamankalasankhya);
-	$bartamankalakrama = $bartamankalakrama + 1;
-	
-	$tarika = date('Y-m-d H:i:s');
-	
-	$dekhakalakrama = mysqli_query($conn,"select atadaaidi from `wingo_periods_5min` order by kramasankhye desc limit 1");
-	$kaladhadi = mysqli_num_rows($dekhakalakrama);
-	$kalakramadhadi=mysqli_fetch_array($dekhakalakrama);
-	
-	if($kaladhadi == null){
-		$tathya = mysqli_query($conn,"INSERT INTO `wingo_periods_5min` (`atadaaidi`,`dinankavannuracisi`) VALUES ('".$bartamankalakrama."','".$tarika."')");
-	}
-	else if($prathama > $kalakramadhadi['atadaaidi']){
-		$katiba=mysqli_query($conn,"TRUNCATE TABLE `wingo_periods_5min`");
-		//$truncateQuery=mysqli_query($con,"TRUNCATE TABLE `abracadabra`");
-		$tathya = mysqli_query($conn,"INSERT INTO `wingo_periods_5min` (`atadaaidi`,`dinankavannuracisi`) VALUES ('".$prathama."','".$tarika."')");
-	}
-	else{
-		$parabartikrama = $kalakramadhadi['atadaaidi'] + 1;
-		$tathya = mysqli_query($conn,"INSERT INTO `wingo_periods_5min` (`atadaaidi`,`dinankavannuracisi`) VALUES ('".$parabartikrama."','".$tarika."')");
-	}
-	
-	$safa_shonu = mysqli_query($conn,"UPDATE wingo_manual_result_5min SET sthiti='0'");
+    include("serive/samparka.php");
+    include("nayakaphalitansa_mulaka_unohs_funf.php");
+
+    /* =========================================================
+     * WinGo 5 Min — wall-clock aligned period generation
+     * Period id: YYYYMMDD + 10003 + 4-digit serial (1..288)
+     * serial = floor(seconds_of_day / 300) + 1  (1-based slot)
+     * ========================================================= */
+    $tarika = date('Y-m-d H:i:s');
+    $dinank = date('Ymd');
+    $secsToday = intval(date('H')) * 3600 + intval(date('i')) * 60 + intval(date('s'));
+    $serial = intval(floor($secsToday / 300)) + 1;
+    if ($serial > 288) $serial = 288;
+    $expected = $dinank . "10003" . sprintf("%04d", $serial);
+
+    $lockOk = mysqli_query($conn, "SELECT GET_LOCK('wingo5min_period', 3) AS l");
+    $lockRow = $lockOk ? mysqli_fetch_assoc($lockOk) : null;
+    $haveLock = ($lockRow && intval($lockRow['l']) === 1);
+
+    if ($haveLock) {
+        $dekhakalakrama = mysqli_query($conn, "SELECT atadaaidi FROM `wingo_periods_5min` ORDER BY kramasankhye DESC LIMIT 1");
+        $kaladhadi = mysqli_num_rows($dekhakalakrama);
+        $kalakramadhadi = mysqli_fetch_array($dekhakalakrama);
+        $lastId = ($kaladhadi > 0) ? strval($kalakramadhadi['atadaaidi']) : null;
+        $lastDate = ($lastId !== null && strlen($lastId) >= 8) ? substr($lastId, 0, 8) : null;
+
+        $nayiRow = false;
+        if ($lastId === null || strlen($lastId) != 17) {
+            mysqli_query($conn, "TRUNCATE TABLE `wingo_periods_5min`");
+            mysqli_query($conn, "INSERT INTO `wingo_periods_5min` (`atadaaidi`, `dinankavannuracisi`) VALUES ('$expected', '$tarika')");
+            $nayiRow = true;
+        } else if ($lastDate != $dinank) {
+            mysqli_query($conn, "TRUNCATE TABLE `wingo_periods_5min`");
+            mysqli_query($conn, "INSERT INTO `wingo_periods_5min` (`atadaaidi`, `dinankavannuracisi`) VALUES ('$expected', '$tarika')");
+            $nayiRow = true;
+        } else if ($lastId < $expected) {
+            mysqli_query($conn, "INSERT INTO `wingo_periods_5min` (`atadaaidi`, `dinankavannuracisi`) VALUES ('$expected', '$tarika')");
+            $nayiRow = true;
+        }
+
+        if ($nayiRow) {
+            mysqli_query($conn, "UPDATE wingo_manual_result_5min SET sthiti='0'");
+        }
+        mysqli_query($conn, "SELECT RELEASE_LOCK('wingo5min_period')");
+    }
 ?>

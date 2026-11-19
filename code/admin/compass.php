@@ -47,6 +47,9 @@
                           <ul class="nav flex-column sub-menu">
                 <li class="nav-item"> <a class="nav-link" href="wingo5min.php">WinGo 5 Min</a></li>
               </ul>
+              <ul class="nav flex-column sub-menu">
+                <li class="nav-item"> <a class="nav-link" href="wingo_api_settings.php">WinGo API Settings</a></li>
+              </ul>
             </div>
           </li>
                   <?php

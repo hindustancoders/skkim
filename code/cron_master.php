@@ -82,12 +82,15 @@ if ($currentMinute % 5 === 0) {
 }
 
 // ==========================================
-// 3.5 Gateway Payout Status Sync (every 5 minutes)
+// 3.5 Gateway Payout Status Sync (once per 5-minute window)
 // WatchPay: api.wataiglobal.com/query/transfer
 // QwackPay: qwackpay.com/api/v1/order/query
 // ==========================================
 if ($currentMinute % 5 === 0) {
-    try {
+    $payoutSyncMarker = $baseDir . "/.last_payout_sync";
+    if (!file_exists($payoutSyncMarker) || (time() - filemtime($payoutSyncMarker)) >= 270) {
+        @touch($payoutSyncMarker);
+        try {
         if (file_exists($baseDir . "/pay/watchpay_lib.php")) {
             require_once($baseDir . "/pay/watchpay_lib.php");
             require_once($baseDir . "/pay/watchpay_actions.php");
@@ -110,6 +113,7 @@ if ($currentMinute % 5 === 0) {
     } catch (Throwable $e) {
         $logs[] = "[" . date('H:i:s') . "] Gateway payout sync ERROR: " . $e->getMessage();
     }
+    }
 }
 
 // ==========================================
@@ -123,19 +127,24 @@ if ($currentMinute % 10 === 0) {
 }
 
 // ==========================================
-// 5. Daily Midnight Maintenance (00:00)
+// 5. Daily Midnight Maintenance (00:00, once per day)
 // ==========================================
 if ($currentHour === 0 && $currentMinute === 0) {
-    run_game_script($baseDir . "/atcron.php");
-    run_game_script($baseDir . "/clear_spin.php");
+    $midnightMarker = $baseDir . "/.last_midnight_maint";
+    if (!file_exists($midnightMarker) || date('Ymd', filemtime($midnightMarker)) !== date('Ymd')) {
+        @touch($midnightMarker);
+        run_game_script($baseDir . "/atcron.php");
+        run_game_script($baseDir . "/clear_spin.php");
+    }
 }
 
 // ==========================================
 // 6. 30-Second Interval Handling
 // ==========================================
-// Wait 30 seconds from start and run 30-second game again
+// Wait 15 seconds from start and run 30-second game again
+// (15s tick cadence keeps result resolution within ~15s of slot end)
 $elapsed = microtime(true) - $startTime;
-$sleepTime = 30 - intval($elapsed);
+$sleepTime = 15 - intval($elapsed);
 if ($sleepTime > 0) {
     sleep($sleepTime);
     run_game_script($baseDir . "/niyamitakelasa30sec.php");    // WinGo 30 Sec (2nd run)

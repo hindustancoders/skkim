@@ -1,3 +1,6 @@
 # Runtime logs - do not commit
 code/pay/*.log
 *.log
+# Runtime lock/marker files
+code/.lock_*
+code/.last_*
