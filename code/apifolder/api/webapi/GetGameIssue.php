@@ -78,7 +78,7 @@
 
                                                         $samasye = "SELECT atadaaidi, dinankavannuracisi
                                                           FROM `" . $wt['table'] . "`
-                                                          ORDER BY kramasankhye DESC LIMIT 1";
+                                                          ORDER BY atadaaidi DESC LIMIT 1";
                                                         $samasyephalitansa=$conn->query($samasye);
                                                         $samasyesreni = mysqli_fetch_array($samasyephalitansa);
 

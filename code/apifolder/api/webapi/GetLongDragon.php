@@ -91,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] != 'GET') {
                     ];
 
                     // Query to fetch Wingo 1 Min game data
-                    $wingoQuery = "SELECT atadaaidi, dinankavannuracisi FROM wingo_periods_1min ORDER BY kramasankhye DESC LIMIT 1";
+                    $wingoQuery = "SELECT atadaaidi, dinankavannuracisi FROM wingo_periods_1min ORDER BY atadaaidi DESC LIMIT 1";
                     $wingoResult = $conn->query($wingoQuery);
                     $wingoRow = mysqli_fetch_array($wingoResult);
 

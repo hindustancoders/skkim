@@ -8,8 +8,12 @@
 $uri = urldecode(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
 $path = $_SERVER['DOCUMENT_ROOT'] . $uri;
 
-// exact file exists -> serve as-is
+// exact file exists -> serve as-is (JS/CSS always revalidated so bundle
+// fixes reach the browser without a manual hard-refresh)
 if ($uri !== '/' && file_exists($path) && !is_dir($path)) {
+    if (preg_match('/\.(js|css)$/i', $uri)) {
+        header('Cache-Control: no-cache, must-revalidate');
+    }
     return false;
 }
 

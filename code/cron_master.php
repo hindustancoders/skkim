@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/config.php';
 /**
  * Master Cron Job Runner for BharatGames
  * 
@@ -12,7 +13,7 @@
  * Can be run via cPanel / CLI:
  * * * * * * php /path/to/public_html/cron_master.php >/dev/null 2>&1
  * Or via Web/Curl:
- * https://bharatgames.online/cron_master.php?key=2c8938261d4aa749ce3190c36e6a71e1
+ * https://<?php echo $_SERVER['HTTP_HOST'] ?? 'localhost'; ?>/cron_master.php?key=2c8938261d4aa749ce3190c36e6a71e1
  */
 
 ignore_user_abort(true);
@@ -95,7 +96,7 @@ if ($currentMinute % 5 === 0) {
         if (file_exists($baseDir . "/pay/watchpay_lib.php")) {
             require_once($baseDir . "/pay/watchpay_lib.php");
             require_once($baseDir . "/pay/watchpay_actions.php");
-            $cronConn = mysqli_connect('127.0.0.1', 'bhar42501_SQL', 'BharatG7_Kx9mQ2vL', 'bhar42501_SQL');
+            $cronConn = mysqli_connect(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_NAME);
             if ($cronConn) {
                 mysqli_set_charset($cronConn, 'utf8mb4');
                 $syncRes = watchpay_action_sync($cronConn);

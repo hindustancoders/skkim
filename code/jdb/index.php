@@ -1,8 +1,9 @@
 <?php
-$host = 'localhost';
-$dbname = 'bhar42501_SQL';
-$user = 'bhar42501_SQL';
-$pass = 'BharatG7_Kx9mQ2vL';
+require_once __DIR__ . '/../config.php';
+$host = DB_SERVER;
+$dbname = DB_NAME;
+$user = DB_USERNAME;
+$pass = DB_PASSWORD;
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname", $user, $pass);

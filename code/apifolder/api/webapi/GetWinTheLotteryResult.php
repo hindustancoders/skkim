@@ -41,23 +41,54 @@
 					$sesresult=$conn->query($sesquery);
 					$sesnum = mysqli_num_rows($sesresult);
 					if($sesnum == 1){
-						$typeId = $issueNumber[12];
+						/* Game type from the issueNumber PREFIX (positions 8-12):
+						   10001=1m, 10002=3m, 10003=5m, 10004=10m, 10005=30s.
+						   (The old $issueNumber[12] single-char check mapped 30s
+						   to the 10min bets table and 10m to the 30sec table,
+						   so the win/loss popup never appeared for 30s / 10m.) */
+						$wingoPrefix = substr($issueNumber, 8, 5);
 						$shonuid = $data_auth['payload']['id'];
-						
-						if($typeId == 1){
+
+						if($wingoPrefix === '10001'){
 							$jayshriram = 'wingo_bets_1min';
+							$typeId = 1;
 						}
-						else if($typeId == 2){
+						else if($wingoPrefix === '10002'){
 							$jayshriram = 'wingo_bets_3min';
+							$typeId = 2;
 						}
-						else if($typeId == 3){
+						else if($wingoPrefix === '10003'){
 							$jayshriram = 'wingo_bets_5min';
+							$typeId = 3;
 						}
-						else if($typeId == 4){
-							$jayshriram = 'wingo_bets_30sec';
-						}
-						else if($typeId == 5){
+						else if($wingoPrefix === '10004'){
 							$jayshriram = 'wingo_bets_10min';
+							$typeId = 5;
+						}
+						else if($wingoPrefix === '10005'){
+							$jayshriram = 'wingo_bets_30sec';
+							$typeId = 4;
+						}
+						else{
+							$typeId = $issueNumber[12];
+							if($typeId == 1){
+								$jayshriram = 'wingo_bets_1min';
+							}
+							else if($typeId == 2){
+								$jayshriram = 'wingo_bets_3min';
+							}
+							else if($typeId == 3){
+								$jayshriram = 'wingo_bets_5min';
+							}
+							else if($typeId == 4){
+								$jayshriram = 'wingo_bets_30sec';
+							}
+							else if($typeId == 5){
+								$jayshriram = 'wingo_bets_10min';
+							}
+							else{
+								$jayshriram = 'wingo_bets_1min';
+							}
 						}
 						
 						$samasye = "SELECT

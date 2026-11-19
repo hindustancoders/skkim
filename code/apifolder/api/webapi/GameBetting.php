@@ -72,7 +72,7 @@
                                                         if($amount >= 1){
                                                                 $samasye = "SELECT atadaaidi
                                                                   FROM ".$sonofgod."
-                                                                  ORDER BY kramasankhye DESC LIMIT 1";
+                                                                  ORDER BY atadaaidi DESC LIMIT 1";
                                                                 $samasyephalitansa=$conn->query($samasye);
                                                                 $samasyesreni = mysqli_fetch_array($samasyephalitansa);
                                                                 if($samasyesreni['atadaaidi'] == $issuenumber){

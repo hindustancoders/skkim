@@ -44,7 +44,7 @@
                                         $sesnum = mysqli_num_rows($sesresult);
                                         if($sesnum == 1){
                                                 $protocol = (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) ? $_SERVER['HTTP_X_FORWARDED_PROTO'] : ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http');
-                                                $host = !empty($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'bharatgames.online';
+                                                $host = !empty($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '';
                                                 $sites = $protocol . '://' . $host;
                                                 
                                                 $data = [];

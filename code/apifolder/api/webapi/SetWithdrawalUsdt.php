@@ -48,7 +48,7 @@
 					$sesresult=$conn->query($sesquery);
 					$sesnum = mysqli_num_rows($sesresult);
 					if($sesnum == 1){
-						/*$url = 'https://api.bharatgames.online/api/webapi/GetBankList';
+						/*$url = 'https://api.<?php echo $_SERVER['HTTP_HOST'] ?? 'localhost'; ?>/api/webapi/GetBankList';
 						$payld = array(
 							'language' => 0,							
 							'random' => 'bbfdf080be3d4529aee34c148e0ad9f8',

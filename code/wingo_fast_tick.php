@@ -10,9 +10,20 @@
  * All steps are idempotent and GET_LOCK protected, so running this
  * alongside cron_master.php is safe (no double rows / double payout).
  *
- * CLI ONLY:  php wingo_fast_tick.php
+ * CLI:       php wingo_fast_tick.php
+ * Web cron:  https://YOUR-DOMAIN/wingo_fast_tick.php?key=2c8938261d4aa749ce3190c36e6a71e1
+ *            (same key as cron_master.php — cPanel cron 2 lines total)
  */
-if (php_sapi_name() !== 'cli') { http_response_code(403); exit("CLI only"); }
+if (php_sapi_name() !== 'cli') {
+    /* web cron: same secret key as cron_master.php */
+    $secretKey = "2c8938261d4aa749ce3190c36e6a71e1";
+    if (!isset($_GET['key']) || $_GET['key'] !== $secretKey) {
+        http_response_code(403);
+        exit("Access denied. Invalid cron key.");
+    }
+    ignore_user_abort(true);
+    set_time_limit(60);
+}
 
 $baseDir = __DIR__;
 include($baseDir . "/serive/samparka.php");

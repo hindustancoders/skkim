@@ -72,7 +72,7 @@ $urlInfo = htmlspecialchars(mysqli_real_escape_string($conn, ($_GET['urlInfo'] ?
 		
 		$urlarr = explode (",", $urlInfo);
 		$theirurl = $urlarr[0];
-		$myurl = 'https://bharatgames.online';
+		$myurl = (BG_SITE_BASE_URL !== '' ? BG_SITE_BASE_URL : 'https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost')) . '/';
 		
 		if($shonusign == $sign && $theirurl == $myurl){
 ?>

@@ -1,5 +1,6 @@
 <?php
-        $conn = mysqli_connect('127.0.0.1', 'bhar42501_SQL', 'BharatG7_Kx9mQ2vL', 'bhar42501_SQL');
+require_once __DIR__ . '/../config.php';
+$conn = mysqli_connect(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_NAME);
         
         if (!$conn) {
                 echo "Error: " . mysqli_connect_error();

@@ -1,9 +1,6 @@
 <?php
         // Global DB connection (used by files including ../conn.php from /gyrox and /gyrox/DKH)
-        define('DB_SERVER', '127.0.0.1');
-        define('DB_USERNAME', 'bhar42501_SQL');
-        define('DB_PASSWORD', 'BharatG7_Kx9mQ2vL');
-        define('DB_NAME', 'bhar42501_SQL');
+        require_once __DIR__ . '/config.php';
 
         $conn = mysqli_connect(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_NAME);
         if (!$conn) { echo 'Error: ' . mysqli_connect_error(); exit(); }

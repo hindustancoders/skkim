@@ -135,7 +135,7 @@ function qwackpay_create_payin($acct, $orderNo, $amount, $notifyUrl, $returnUrl,
         'amount'          => round((float)$amount, 2),
         'order_id'        => $orderNo,
         'customer_phone'  => $customerPhone !== '' ? $customerPhone : '9876543210',
-        'customer_email'  => $customerEmail !== '' ? $customerEmail : 'pay@bharatgames.online',
+        'customer_email'  => $customerEmail !== '' ? $customerEmail : 'pay@' . ($_SERVER['HTTP_HOST'] ?? 'localhost'),
         'notify_url'      => $notifyUrl,
         'return_url'      => $returnUrl,
     );

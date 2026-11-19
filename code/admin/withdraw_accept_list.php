@@ -179,7 +179,7 @@ while ($row = mysqli_fetch_array($Query)) {
 		</div>
 		<footer class="footer">
 			<div class="d-sm-flex justify-content-center justify-content-sm-between">
-				<span class="text-muted d-block text-center text-sm-left d-sm-inline-block">Copyright © bharatgames.online 2024</span>
+				<span class="text-muted d-block text-center text-sm-left d-sm-inline-block">Copyright © <?php echo htmlspecialchars($_SERVER['HTTP_HOST'] ?? 'localhost'); ?> 2024</span>
 			</div>
 		</footer>
       </div>     

@@ -1,11 +1,12 @@
 <?php
+require_once __DIR__ . '/../config.php';
 // Database connection info
 $dbDetails = array(
-    'host' => '127.0.0.1',
-    'user' => 'bhar42501_SQL',
-    'pass' => 'BharatG7_Kx9mQ2vL',
-    'db'   => 'bhar42501_SQL'
-);
+		'host' => DB_SERVER,
+		'user' => DB_USERNAME,
+		'pass' => DB_PASSWORD,
+		'db'   => DB_NAME
+	);
 
 // Start session and get the current user
 session_start();

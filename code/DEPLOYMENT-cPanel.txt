@@ -1,56 +1,90 @@
 ================================================================
-BHARAT GAMES - cPanel DEPLOYMENT GUIDE
+BHARAT GAMES - cPanel DEPLOYMENT GUIDE (v2 - AUTO DOMAIN)
 ================================================================
 
-WHAT'S IN THIS PACKAGE
-- Complete PHP website + admin panel (no Node.js required)
-- No portable MySQL / no sandbox files - only production code
-- Import the SQL dump separately (bhar42501_SQL_full_dump.sql)
+Ab deploy sirf 3 step ka hai:
+  1. Code upload + SQL import
+  2. config.php mein DB credentials (SIRF 1 FILE)
+  3. 2 cron jobs
+
+Domain khud detect ho jata hai - kahi bhi domain change karne
+ki zarurat NAHI hai (http/https/Cloudflare sab auto handle).
 
 ----------------------------------------------------------------
-STEP 1: UPLOAD CODE
+STEP 1: UPLOAD + DATABASE
 ----------------------------------------------------------------
 1. cPanel -> File Manager -> public_html
-2. Upload bharatgames_cpanel_code.zip -> Extract into public_html
-   (zip root = site files: index.html, conn.php, admin/, pay/, apifolder/...)
+2. Code zip upload karke extract karo (zip root = site files:
+   index.html, config.php, conn.php, admin/, pay/, apifolder/...)
+3. cPanel -> MySQL Databases:
+   - Database banao (cPanel prefix laga sakta hai)
+   - User banao + password set karo
+   - User ko database par ALL PRIVILEGES do
+4. cPanel -> phpMyAdmin -> database select -> Import ->
+   bhar42501_SQL_full_dump.sql -> Go
+   (dump mein CREATE DATABASE/USE nahi hai - jo DB select karoge
+    wahi import hoga)
 
 ----------------------------------------------------------------
-STEP 2: CREATE DATABASE
+STEP 2: config.php  (SIRF YE EK FILE EDIT KARO)
 ----------------------------------------------------------------
-1. cPanel -> MySQL Databases
-2. Database name: bhar42501_SQL   (must match exactly)
-3. User: bhar42501_SQL  Password: BharatG7_Kx9mQ2vL
-4. Grant ALL PRIVILEGES on the database to the user
-5. cPanel -> phpMyAdmin -> select database -> Import ->
-   upload bhar42501_SQL_full_dump.sql -> Go
-   (dump has no CREATE DATABASE/USE: it imports into the DB you select)
+public_html/config.php kholo, sirf ye 4 lines change karo:
 
-If your cPanel forces a prefix (e.g. bhar42501_SQL already correct here),
-update the same 4 values in these connection files if changed:
-   conn.php, serive/samparka.php, apifolder/conn.php, admin/conn.php,
-   gyrox/conn.php, pay files that create cron DB connections (cron_master.php)
+    define('DB_SERVER',   'localhost');         // cPanel: 'localhost'
+    define('DB_USERNAME', 'cpaneluser_dbname'); // tumhara DB user
+    define('DB_PASSWORD', 'tumharapassword');   // tumhara DB password
+    define('DB_NAME',     'cpaneluser_dbname'); // tumhara DB name
+
+Bas. Poore site ke 25+ connection files (conn.php, admin/*,
+apifolder/*, serive/*, jdb/*, pay/*, cron_master.php) isi file
+se credentials uthate hain. Kuch aur edit karne ki zarurat nahi.
+
+DOMAIN: Automatic detect hota hai (HTTP_HOST + https/proxy
+detection). SITE_DOMAIN constant CLI/cron links ke liye optional
+hai - khali chhod do to bhi chalega.
 
 ----------------------------------------------------------------
 STEP 3: PHP VERSION
 ----------------------------------------------------------------
-cPanel -> MultiPHP Manager -> select domain -> PHP 8.1 or newer
-Required extensions (default enabled on most hosts):
-mysqli, curl, mbstring, openssl, json, fileinfo
+cPanel -> MultiPHP Manager -> PHP 8.1 ya newer
+Extensions (default on): mysqli, curl, mbstring, openssl, json
 
 ----------------------------------------------------------------
-STEP 4: CRON JOBS (games ke results ke liye ZARURI)
+STEP 4: CRON JOBS (2 LINES - RESULTS KE LIYE ZARURI)
 ----------------------------------------------------------------
 cPanel -> Cron Jobs -> Common Settings: Once Per Minute ->
 
-php /home/YOUR_CPANEL_USER/public_html/cron_master.php >/dev/null 2>&1
+Line 1 (master - saare games + payout sync + daily resets):
+* * * * * php /home/YOUR_CPANEL_USER/public_html/cron_master.php >/dev/null 2>&1
 
-This master cron handles ALL games (WinGo 30s/1m/3m/5m/10m, 5D, K3,
-TRX WinGo) + gateway payout status sync + daily resets.
+Line 2 (fast tick - WinGo result 2-4s mein declare):
+* * * * * php /home/YOUR_CPANEL_USER/public_html/wingo_fast_tick.php >/dev/null 2>&1
+
+(YOUR_CPANEL_USER = cPanel username; Cron Jobs page par path
+dikh jata hai. Dono lines "Once Per Minute" pe set karo.)
+
+Web cron (cron-job.org / external) ke liye:
+curl -s "https://YOUR-DOMAIN.com/cron_master.php?key=2c8938261d4aa749ce3190c36e6a71e1" >/dev/null 2>&1
+curl -s "https://YOUR-DOMAIN.com/wingo_fast_tick.php?key=2c8938261d4aa749ce3190c36e6a71e1" >/dev/null 2>&1
+
+cron_master.php handles: WinGo 30s/1m/3m/5m/10m, 5D, K3, TRX
+WinGo (1m/3m/5m/10m) + WatchPay/QwackPay payout sync + midnight
+resets. wingo_fast_tick.php WinGo ka open-period create +
+settlement fast rakhta hai (result latency 2-4s).
 
 ----------------------------------------------------------------
-STEP 5: URLS AND LOGINS
+STEP 5: VERIFY (2 MINUTE)
 ----------------------------------------------------------------
-Website      : https://your-domain.com/
+1. Site:  https://YOUR-DOMAIN.com/   (login page aana chahiye)
+2. Admin: https://YOUR-DOMAIN.com/admin/
+3. WinGo kholo - countdown chale aur har round ka result
+   history mein aane lage (30s/1m/3m/5m)
+4. cron_master.php?key=... browser mein kholo - JSON logs dikhega
+
+----------------------------------------------------------------
+URLS AND LOGINS
+----------------------------------------------------------------
+Website      : https://your-domain.com/   (auto-detected)
 Admin panel  : https://your-domain.com/admin/
 Admin user   : 1234567890
 Admin pass   : admin123        (change it: Admin > Finance > adminpass.php)
@@ -87,6 +121,8 @@ STEP 6: FIRST USER = ADMIN (rules)
 SECURITY NOTES
 ----------------------------------------------------------------
 - admin/.htaccess redirects 404s to the admin login (not the user site).
-- Session test files (sess_test*.php) were removed.
+- DB credentials ab poore code mein sirf config.php mein hain -
+  us file ko kabhi git mein publicly push mat karna.
 - Delete watchpays.log / qwackpay.log periodically (auto-created in /pay).
 - Force HTTPS in cPanel (Force HTTPS Redirect) - recommended.
+================================================================

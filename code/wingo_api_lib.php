@@ -403,9 +403,9 @@ if (!defined('WINGO_API_LIB')) {
             return $data;
         }
 
-        /* 4) politeness gap: never curl the API more than once per 4s
+        /* 4) politeness gap: never curl the API more than once per 2s
               per game, even when multiple processes force-fresh at once */
-        if ($haveDbCols && ($nowTs - intval($cfg[$colAt])) < 4) {
+        if ($haveDbCols && ($nowTs - intval($cfg[$colAt])) < 2) {
             $data = $fail;
             $data['error'] = 'min-gap (politeness, last attempt ' . ($nowTs - intval($cfg[$colAt])) . 's ago)';
             return $data;
@@ -533,38 +533,22 @@ if (!defined('WINGO_API_LIB')) {
                     return ['number' => $c['number'], 'colour' => $c['colour'], 'api_period' => $c['period'], 'status' => 'used'];
                 }
             }
-            /* feed healthy but this issue not published yet:
-               wait (grace window from slot end) instead of publishing
-               a wrong local result — caller retries next tick */
-            $slot = wingo_api_slot_times($localPeriodId, wingo_api_interval_of($gameKey), $gameKey);
-            $deadline = ($slot !== null) ? $slot['end'] + $graceSec : time() + 10;
-            if (time() < $deadline) {
-                wingo_api_log_event($conn, $gameKey, $localPeriodId, null, null, null, 'wait',
-                    'API feed healthy, issueNumber ' . $localPeriodId . ' not published yet (grace until ' . date('H:i:s', $deadline) . ')', $fetch['latency_ms']);
-                return ['status' => 'wait'];
-            }
-            wingo_api_log_event($conn, $gameKey, $localPeriodId, null, null, null, 'fallback',
-                'API grace window expired without issueNumber ' . $localPeriodId . '; auto algorithm used', $fetch['latency_ms']);
-            return null;
+            /* v6 API-ONLY: feed healthy but this issue not published yet.
+               NEVER generate a local result — wait until the API publishes
+               the issueNumber (history shows the period only when the API
+               has answered it). Caller retries on the next tick. */
+            wingo_api_log_event($conn, $gameKey, $localPeriodId, null, null, null, 'wait',
+                'API feed healthy, issueNumber ' . $localPeriodId . ' not published yet; waiting for API', $fetch['latency_ms']);
+            return ['status' => 'wait'];
         }
 
-        /* feed fetch failed — decide: wait (throttled/unknown) or fallback (API really down) */
-        $errStr = strval($fetch['error']);
-        if (strpos($errStr, 'min-gap') === 0) {
-            /* just politeness-throttled: state unknown -> retry next tick (grace-bounded) */
-            $slot = wingo_api_slot_times($localPeriodId, wingo_api_interval_of($gameKey), $gameKey);
-            $deadline = ($slot !== null) ? $slot['end'] + $graceSec : time() + 10;
-            if (time() < $deadline) {
-                return ['status' => 'wait'];
-            }
-            wingo_api_log_event($conn, $gameKey, $localPeriodId, null, null, null, 'fallback',
-                'grace expired while feed throttled; auto algorithm used', $fetch['latency_ms']);
-            return null;
-        }
-        /* feed DOWN (curl error / HTTP error / circuit open) -> never wait on a dead API */
-        wingo_api_log_event($conn, $gameKey, $localPeriodId, null, null, null, 'fallback',
-            'API feed failed (' . $errStr . '); auto algorithm used', $fetch['latency_ms']);
-        return null;
+        /* v6 API-ONLY: feed down/throttled/circuit-open — still no local
+           result. Wait; the API-only rule means history never diverges
+           from the feed (admin manual prediction is the only override,
+           handled by the game scripts before resolve). */
+        wingo_api_log_event($conn, $gameKey, $localPeriodId, null, null, null, 'wait',
+            'API feed unavailable (' . strval($fetch['error']) . '); waiting for API', $fetch['latency_ms']);
+        return ['status' => 'wait'];
     }
 
     /* ---------------------------------------------------------
@@ -585,20 +569,45 @@ if (!defined('WINGO_API_LIB')) {
         $safePeriods = preg_replace('/[^a-zA-Z0-9_]/', '', $periodsTable);
         $safeResults = preg_replace('/[^a-zA-Z0-9_]/', '', $resultsTable);
 
+        $now = time();
+        /* v6 API-ONLY: periods OLDER than the oldest issue in the API list can
+           never be answered by the feed -> excluded IN THE QUERY so thousands
+           of stale rows can never block settlement of newer periods. */
+        $oldest = null;
+        $cfgDue = wingo_api_get_config($conn);
+        if (wingo_api_game_enabled($cfgDue, $gameKey)) {
+            $feedDue = wingo_api_fetch_feed($conn, $gameKey);
+            if ($feedDue['ok'] && count($feedDue['candidates']) > 0) {
+                $periods = array();
+                foreach ($feedDue['candidates'] as $c) {
+                    if ($c['period'] !== null && preg_match('/^\d{17}$/', strval($c['period']))) $periods[] = strval($c['period']);
+                }
+                if (count($periods) > 0) $oldest = min($periods);
+            }
+        }
         $out = mysqli_query($conn, "SELECT p.atadaaidi
             FROM `" . $safePeriods . "` p
             LEFT JOIN `" . $safeResults . "` r ON r.kalaparichaya = p.atadaaidi
             WHERE r.shonu IS NULL
-            ORDER BY p.kramasankhye ASC
-            LIMIT 25");
+              " . ($oldest !== null ? "AND p.atadaaidi >= '" . mysqli_real_escape_string($conn, $oldest) . "'" : "") . "
+            ORDER BY p.atadaaidi ASC
+            LIMIT 400");
         if (!$out) return null;
-
-        $now = time();
+        /* EARLY SETTLE (v8): the external feed publishes each issueNumber's
+           result ~2s BEFORE its slot ends (verified live). Settling in that
+           window makes the result row exist before the countdown reaches 0,
+           so game history shows the correct number the instant the timer
+           completes. Safe for payouts: GameBetting rejects any bet once the
+           result row exists, and the frontend locks betting in the last 5s.
+           If the feed has not published the issue yet the script simply
+           waits (resolve -> wait) and the next tick retries. */
+        $earlySec = 4;
         while ($row = mysqli_fetch_assoc($out)) {
             $pid = strval($row['atadaaidi']);
             $end = wingo_api_slot_end_epoch($pid, $intervalSec, $gameKey);
             if ($end === null) continue;        // unparseable id -> skip
-            if ($end <= $now) return $pid;      // due
+            if ($oldest !== null && strcasecmp($pid, $oldest) < 0) continue; // beyond feed history -> skip
+            if ($end <= $now + $earlySec) return $pid;   // due (early window or past)
             return null;                        // ascending order: first not-due => none due
         }
         return null;
@@ -652,22 +661,6 @@ if (!defined('WINGO_API_LIB')) {
         $slot = wingo_api_wallclock_slot($gameKey);
         if ($slot === null) return null;
 
-        /* ---- open target = wall-clock slot, or API latest + 1 when ahead ---- */
-        $target = $slot['period'];
-        $cfg = wingo_api_get_config($conn);
-        if (wingo_api_game_enabled($cfg, $gameKey)) {
-            $feed = wingo_api_fetch_feed($conn, $gameKey);
-            if ($feed['ok'] && count($feed['candidates']) > 0) {
-                $latest = $feed['candidates'][0]['period'];
-                if ($latest !== null && preg_match('/^\d{17}$/', strval($latest))) {
-                    $apiOpen = wingo_api_next_issue($latest);
-                    if ($apiOpen !== null && strcasecmp($apiOpen, $target) > 0) {
-                        $target = $apiOpen;     // API ahead of local clock -> follow the API
-                    }
-                }
-            }
-        }
-
         $safeTable  = preg_replace('/[^a-zA-Z0-9_]/', '', $periodsTable);
         $safeManual = preg_replace('/[^a-zA-Z0-9_]/', '', $manualTable);
         $safeRes    = str_replace('_periods_', '_results_', $safeTable);
@@ -677,7 +670,7 @@ if (!defined('WINGO_API_LIB')) {
         $lockRow = $lockOk ? mysqli_fetch_assoc($lockOk) : null;
         if (!$lockRow || intval($lockRow['l']) !== 1) return null;   // another writer mid-flight
 
-        $dekh = mysqli_query($conn, "SELECT atadaaidi FROM `" . $safeTable . "` ORDER BY kramasankhye DESC LIMIT 1");
+        $dekh = mysqli_query($conn, "SELECT atadaaidi FROM `" . $safeTable . "` ORDER BY atadaaidi DESC LIMIT 1");
         $lastId = null;
         if ($dekh && mysqli_num_rows($dekh) > 0) {
             $r = mysqli_fetch_array($dekh);
@@ -687,6 +680,34 @@ if (!defined('WINGO_API_LIB')) {
         $now = time();
         $inserted = false;
 
+        /* ---- API-DRIVEN (v7): the OPEN (betting) period is ALWAYS the
+               wall-clock slot of the server clock, so the countdown can
+               never exceed the game interval (30s game -> max 30s left,
+               1m -> max 60s ...). If the API feed ever runs ahead of the
+               local clock, following apiOpen would inflate the countdown
+               to 35-45s on a 30s game — that is why the open id is NOT
+               taken from the feed. Results still come ONLY from the API:
+               every issue present in the feed list is inserted as a history
+               row, and settlement resolves each period the moment the API
+               publishes its issueNumber (admin manual prediction is the
+               only override). When the feed is down the countdown keeps
+               running on the wall-clock slot; NO result is ever generated
+               locally. 10m (API disabled) keeps the local scheme. ---- */
+        $cfg = wingo_api_get_config($conn);
+        $target = $slot['period'];
+        if (wingo_api_game_enabled($cfg, $gameKey)) {
+            $feed = wingo_api_fetch_feed($conn, $gameKey);
+            if ($feed['ok'] && count($feed['candidates']) > 0) {
+                /* feed list is newest-first; insert oldest-first so the
+                   auto-increment kramasankhye stays aligned with period id */
+                foreach (array_reverse($feed['candidates']) as $c) {
+                    $cp = $c['period'];
+                    if ($cp === null || !preg_match('/^\d{17}$/', strval($cp))) continue;
+                    mysqli_query($conn, "INSERT IGNORE INTO `" . $safeTable . "` (`atadaaidi`, `dinankavannuracisi`) VALUES ('" . mysqli_real_escape_string($conn, strval($cp)) . "', '" . $tarika . "')");
+                }
+            }
+        }
+
         if ($lastId === null || strlen($lastId) != 17 || !ctype_digit($lastId)) {
             /* no usable row -> start the day/scheme fresh */
             mysqli_query($conn, "TRUNCATE TABLE `" . $safeTable . "`");
@@ -694,23 +715,15 @@ if (!defined('WINGO_API_LIB')) {
             $lastId = $target;
             $inserted = true;
         } else if (strcasecmp($lastId, $target) < 0) {
-            /* behind the open target -> backfill every missed slot (+1 each) */
-            $cur = $lastId;
-            $filled = 0;
-            while ($filled < 20) {
-                $nxt = wingo_api_next_issue($cur);
-                if ($nxt === null || strcasecmp($nxt, $target) > 0) break;
-                mysqli_query($conn, "INSERT INTO `" . $safeTable . "` (`atadaaidi`, `dinankavannuracisi`) VALUES ('" . $nxt . "', '" . $tarika . "')");
-                $cur = $nxt;
-                $inserted = true;
-                $filled++;
-                if (strcasecmp($cur, $target) === 0) break;
-            }
-            $lastId = $cur;
+            /* behind the open target -> jump straight to it (no wall-clock
+               backfill chain: periods come from the API numbering only) */
+            mysqli_query($conn, "INSERT IGNORE INTO `" . $safeTable . "` (`atadaaidi`, `dinankavannuracisi`) VALUES ('" . $target . "', '" . $tarika . "')");
+            $lastId = $target;
+            $inserted = true;
         } else if (strcasecmp($lastId, $target) === 0) {
-            /* current wall-clock slot on top: if its window is already
-               over (or already settled) open the NEXT period (+1) so the
-               countdown never sticks on a finished period */
+            /* open row on top: if its window is already over (or already
+               settled) open the NEXT period (+1) so the countdown never
+               sticks on a finished period */
             $st = wingo_api_slot_times($lastId, $slot['interval'], $gameKey);
             $expired = ($st !== null && $st['end'] <= $now);
             $settled = false;
@@ -721,13 +734,13 @@ if (!defined('WINGO_API_LIB')) {
             if ($expired || $settled) {
                 $nxt = wingo_api_next_issue($lastId);
                 if ($nxt !== null) {
-                    mysqli_query($conn, "INSERT INTO `" . $safeTable . "` (`atadaaidi`, `dinankavannuracisi`) VALUES ('" . $nxt . "', '" . $tarika . "')");
+                    mysqli_query($conn, "INSERT IGNORE INTO `" . $safeTable . "` (`atadaaidi`, `dinankavannuracisi`) VALUES ('" . $nxt . "', '" . $tarika . "')");
                     $lastId = $nxt;
                     $inserted = true;
                 }
             }
         }
-        /* lastId > target (API ahead) -> keep the API-driven row as-is */
+        /* lastId > target (API behind) -> keep the API-driven row as-is */
 
         if ($inserted) {
             /* new open period begins: clear stale manual predictions */

@@ -517,7 +517,7 @@
 									  },
 									  {
 										"bankID": 84,
-										"bankLogo": "bharatgames.online://ossimg.bdg123456.com/BDGWin",
+										"bankLogo": "https://ossimg.bdg123456.com/BDGWin",
 										"bankName": "Himachal Pradesh Gramin Bank",
 										"reserved": "1"
 									  },
