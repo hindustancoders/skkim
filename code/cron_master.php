@@ -18,6 +18,7 @@
 ignore_user_abort(true);
 set_time_limit(120);
 date_default_timezone_set('Asia/Kolkata');
+define('CRON_MASTER_RUN', 1);   // lets game scripts run under web cron too
 
 // Security check for web invocation
 if (php_sapi_name() !== 'cli') {

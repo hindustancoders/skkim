@@ -1,5 +1,5 @@
 <?php
-        if (php_sapi_name() !== 'cli') { http_response_code(403); exit; } 
+        if (php_sapi_name() !== 'cli' && !defined('CRON_MASTER_RUN')) { http_response_code(403); exit; }
         include_once(__DIR__ . "/wingo_api_lib.php");
         // === WINGO UPGRADE: resolve the earliest unresolved period whose betting window has ended ===
         $__wingo_target = wingo_api_due_target($conn, 'wingo_periods_1min', 'wingo_results_1min', 60, 'wingo1m', '1m');
@@ -85,7 +85,11 @@
                         }
                         else if($kadimesucyanka == 2 || $kadimesucyanka == 4 || $kadimesucyanka == 6 || $kadimesucyanka == 8){
                                 $banna = 'red';
-                        }               
+                        }
+                        // API colour mapping: use the API "color" field when provided
+                        if (isset($__wingo_api) && is_array($__wingo_api) && !empty($__wingo_api['colour'])) {
+                                $banna = $__wingo_api['colour'];
+                        }
                         $dinanka = date('Y-m-d H:i:s');
                         
                         $yadrcchikasanke = array_fill(0, 4, null);
@@ -618,6 +622,10 @@
                         else if($yadrcchika == 2 || $yadrcchika == 4 || $yadrcchika == 6 || $yadrcchika == 8){
                                 $banna = 'red';
                         }               
+                        // API colour mapping (no-bets branch): API "color" field first
+                        if (isset($__wingoApiRes) && is_array($__wingoApiRes) && !empty($__wingoApiRes['colour'])) {
+                                $banna = $__wingoApiRes['colour'];
+                        }
                         $dinanka = date('Y-m-d H:i:s');
                         
                         $yadrcchikasanke = array_fill(0, 4, null);

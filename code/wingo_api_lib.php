@@ -1,23 +1,31 @@
 <?php
 /**
  * ============================================================
- *  WinGo External API Result Integration Library  (v2)
+ *  WinGo External API Result Integration Library  (v3)
  * ============================================================
  *  Result priority (per period):
  *    1. Admin manual prediction  (wingo_manual_result_XX, sthiti=1)
- *    2. External API feed        (configurable URL + key + proxies)
+ *    2. External API feed        (configurable URL + key, DIRECT hit)
  *    3. Auto algorithm           (min-payout, original behaviour)
  *
- *  Period ids now follow the API issueNumber scheme EXACTLY:
- *    date(UTC, 8) + "1000" + code(1) + serial(4)
- *    codes: 1M=1, 3M=2, 5M=3, 30S=5
- *    serial = 1-based slot index of the UTC day
- *    e.g. 30S at 14:10:27 UTC -> 20261119100051701
- *  (10 Min game has no API endpoint -> stays local IST scheme,
- *   prefix 10004, so it never collides with the 30s prefix 10005.)
- *
- *  Legacy ids (date IST + 10004/10001..10003 + IST serial) are
- *  still settled correctly via wingo_api_slot_end_epoch().
+ *  v3 CHANGES (no proxy fallback):
+ *    - The feed is fetched DIRECTLY from api_base only. Third-party
+ *      proxy relays removed completely (they made the cron hang for
+ *      minutes and froze the WinGo countdown).
+ *    - Fast-fail: one short-timeout attempt + circuit breaker, so the
+ *      cron loop always keeps flowing and periods keep generating.
+ *    - Period ids follow the API issueNumber scheme EXACTLY:
+ *        date(UTC, 8) + "1000" + code(1) + serial(4)
+ *        codes: 1M=1, 3M=2, 5M=3, 30S=5, local-10M=4
+ *        serial = 1-based slot index of the UTC day
+ *      e.g. 30S at 14:10:27 UTC -> 20261119100051701
+ *      Next period = latest published issueNumber + 1 (day wraps at
+ *      the last slot). When the API is unavailable the wall-clock
+ *      slot calc (+1 from the last local period) is used.
+ *    - wingo_api_slot_times(): exact start/end epoch of a slot from
+ *      its period id (countdown alignment for GetGameIssue).
+ *    - wingo_api_normalise_colour(): sanitises API "color" field
+ *      (red / green / violet, comma separated like "red,violet").
  *
  *  Config table : wingo_api_config  (single row, editable in admin)
  *  Log table    : wingo_api_log
@@ -37,7 +45,7 @@ if (!defined('WINGO_API_LIB')) {
             `enabled` TINYINT(1) NOT NULL DEFAULT 1,
             `api_base` VARCHAR(300) NOT NULL DEFAULT 'https://wingo.voterx.xyz/index.php',
             `api_key` VARCHAR(200) NOT NULL DEFAULT 'key122842685683',
-            `timeout_sec` TINYINT NOT NULL DEFAULT 8,
+            `timeout_sec` TINYINT NOT NULL DEFAULT 5,
             `en_30s` TINYINT(1) NOT NULL DEFAULT 1,
             `en_1m` TINYINT(1) NOT NULL DEFAULT 1,
             `en_3m` TINYINT(1) NOT NULL DEFAULT 1,
@@ -51,19 +59,14 @@ if (!defined('WINGO_API_LIB')) {
             `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        // v2 columns: proxy chain + last-good-path memory
+        // v3 migration: proxy-chain columns are obsolete -> drop them
         $res = mysqli_query($conn, "SHOW COLUMNS FROM `wingo_api_config` LIKE 'proxy_tpls'");
-        if (!$res || mysqli_num_rows($res) === 0) {
-            mysqli_query($conn, "ALTER TABLE `wingo_api_config`
-                ADD COLUMN `proxy_tpls` TEXT NULL AFTER `param_10m`,
-                ADD COLUMN `last_good_path` TINYINT NOT NULL DEFAULT 0 AFTER `proxy_tpls`");
-            mysqli_query($conn, "UPDATE `wingo_api_config` SET `proxy_tpls` = '" .
-                implode("\n", [
-                    'https://api.allorigins.win/raw?url={URL_ENC}',
-                    'https://api.codetabs.com/v1/proxy?quest={URL_ENC}',
-                    'https://corsproxy.io/?url={URL_ENC}',
-                    'https://cors.eu.org/{URL}',
-                ]) . "' WHERE id = 1");
+        if ($res && mysqli_num_rows($res) > 0) {
+            mysqli_query($conn, "ALTER TABLE `wingo_api_config` DROP COLUMN `proxy_tpls`");
+        }
+        $res = mysqli_query($conn, "SHOW COLUMNS FROM `wingo_api_config` LIKE 'last_good_path'");
+        if ($res && mysqli_num_rows($res) > 0) {
+            mysqli_query($conn, "ALTER TABLE `wingo_api_config` DROP COLUMN `last_good_path`");
         }
         mysqli_query($conn, "CREATE TABLE IF NOT EXISTS `wingo_api_log` (
             `log_id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -104,7 +107,10 @@ if (!defined('WINGO_API_LIB')) {
     }
 
     /* ---------------------------------------------------------
-     * Colour helper (standard WinGo mapping)
+     * Colour helpers
+     * wingo_api_colour_from_number(): standard WinGo mapping
+     * wingo_api_normalise_colour():   sanitise the API "color"
+     *   value ("green", "red,violet" ...) -> allowed tokens only.
      * --------------------------------------------------------- */
     function wingo_api_colour_from_number($n) {
         $n = intval($n);
@@ -112,6 +118,22 @@ if (!defined('WINGO_API_LIB')) {
         if ($n === 5) return 'green,violet';
         if ($n % 2 === 1) return 'green';
         return 'red';
+    }
+
+    function wingo_api_normalise_colour($colour) {
+        $colour = strtolower(trim(strval($colour)));
+        if ($colour === '') return null;
+        $parts = preg_split('/[\s,\/|]+/', $colour);
+        $allowed = ['red', 'green', 'violet'];
+        $out = [];
+        foreach ($parts as $p) {
+            $p = strtolower(trim($p));
+            if ($p === 'red') { if (!in_array('red', $out)) $out[] = 'red'; }
+            elseif ($p === 'green') { if (!in_array('green', $out)) $out[] = 'green'; }
+            elseif ($p === 'violet' || $p === 'purple') { if (!in_array('violet', $out)) $out[] = 'violet'; }
+        }
+        if (count($out) === 0) return null;
+        return implode(',', $out);
     }
 
     /* ---------------------------------------------------------
@@ -125,14 +147,64 @@ if (!defined('WINGO_API_LIB')) {
         return null;
     }
 
+    function wingo_api_prefix_of($periodId) {
+        $periodId = trim(strval($periodId));
+        if (strlen($periodId) != 17 || !ctype_digit($periodId)) return null;
+        return substr($periodId, 8, 5);
+    }
+
+    /* slots per UTC day by prefix code */
+    function wingo_api_slots_per_day($prefix) {
+        $map = ['10001' => 1440, '10002' => 480, '10003' => 288, '10004' => 144, '10005' => 2880];
+        return isset($map[$prefix]) ? $map[$prefix] : null;
+    }
+
+    /**
+     * NEXT ISSUE NUMBER (+1 rule, day-wrapping).
+     * The API emits one issueNumber per interval; the next slot is
+     * always previous + 1. At the last slot of the day the serial
+     * wraps to 0001 and the date part advances (UTC).
+     */
+    function wingo_api_next_issue($issueNumber) {
+        $pid = trim(strval($issueNumber));
+        if (strlen($pid) != 17 || !ctype_digit($pid)) return null;
+        $date   = substr($pid, 0, 8);
+        $prefix = substr($pid, 8, 5);
+        $serial = intval(substr($pid, 13, 4));
+        $max = wingo_api_slots_per_day($prefix);
+        if ($max === null) return null;
+        $y = intval(substr($date, 0, 4));
+        $m = intval(substr($date, 4, 2));
+        $d = intval(substr($date, 6, 2));
+        if (!checkdate($m, $d, $y)) return null;
+        if ($serial < 1 || $serial > $max) return null;
+        if ($serial + 1 <= $max) {
+            return $date . $prefix . sprintf("%04d", $serial + 1);
+        }
+        // day wrap: next UTC date, serial 1
+        $nextTs = gmmktime(0, 0, 0, $m, $d, $y) + 86400;
+        return gmdate('Ymd', $nextTs) . $prefix . "0001";
+    }
+
     /* ---------------------------------------------------------
-     * SLOT END EPOCH — scheme aware
+     * SLOT END EPOCH — scheme aware (settlement timing)
      *  New (API) scheme ids: date is UTC date, serial counts from
      *  UTC midnight -> slot end = UTC midnight + serial*interval.
      *  Legacy ids (10m always; old 30s rows prefix 10004; old
      *  1m/3m/5m rows) counted from IST midnight (+05:30).
      * --------------------------------------------------------- */
     function wingo_api_slot_end_epoch($periodId, $intervalSec, $gameKey = '') {
+        $times = wingo_api_slot_times($periodId, $intervalSec, $gameKey);
+        return $times ? $times['end'] : null;
+    }
+
+    /**
+     * START + END epoch of a slot derived purely from the period id.
+     * Returns ['start'=>int,'end'=>int] or null.
+     * Used by GetGameIssue so the countdown always matches the API
+     * slot boundary (no drift from late cron inserts).
+     */
+    function wingo_api_slot_times($periodId, $intervalSec, $gameKey = '') {
         $pid = trim(strval($periodId));
         if (strlen($pid) != 17 || !ctype_digit($pid)) return null;
         $date   = substr($pid, 0, 8);
@@ -143,30 +215,35 @@ if (!defined('WINGO_API_LIB')) {
         $d = intval(substr($date, 6, 2));
         if (!checkdate($m, $d, $y) || $serial < 1) return null;
         $intervalSec = max(1, intval($intervalSec));
+        $max = wingo_api_slots_per_day($prefix);
+        if ($max !== null && $serial > $max) return null;
         $midUtc = gmmktime(0, 0, 0, $m, $d, $y);
         $endUtc = $midUtc + $serial * $intervalSec;
         // IST midnight of the same civil date = UTC midnight MINUS 5:30
-        // (00:00 IST == previous day 18:30 UTC == midUtc - 19800)
         $endIst = $midUtc - 19800 + $serial * $intervalSec;
         $now = time();
-        if ($gameKey === '30s') {
-            return ($prefix === '10005') ? $endUtc : $endIst;   // 10005 = new API scheme
-        }
         if ($gameKey === '10m') {
-            return $endIst;                                     // local game, IST scheme
+            return ['start' => $endIst - $intervalSec, 'end' => $endIst];
         }
-        // 1m/3m/5m share prefixes between legacy IST and new UTC ids:
-        if ($endUtc > $now && $endIst <= $now && ($now - $endIst) < $intervalSec * 3) {
-            return $endIst; // legacy row still inside its settle window
+        if ($gameKey === '30s') {
+            $end = ($prefix === '10005') ? $endUtc : $endIst;
+            return ['start' => $end - $intervalSec, 'end' => $end];
         }
-        return $endUtc;
+        // 1m/3m/5m: legacy IST ids and new UTC ids share the prefix.
+        // Pick the interpretation whose end is closest to "now"
+        // (the row being queried is always the CURRENT slot).
+        if (abs($now - $endUtc) <= abs($now - $endIst)) {
+            return ['start' => $endUtc - $intervalSec, 'end' => $endUtc];
+        }
+        return ['start' => $endIst - $intervalSec, 'end' => $endIst];
     }
 
     /* ---------------------------------------------------------
      * Flexible response parser
      * Accepts the real feed shape {"data":{"list":[...]},"code":0,...}
      * and several common variants. Normalises each item to:
-     * period / number / colour. Returns candidates (as given).
+     * period / number / colour. Returns candidates, newest first
+     * (the API list is newest-first: list[0] = latest result).
      * --------------------------------------------------------- */
     function wingo_api_parse_feed($rawBody) {
         $body = trim(strval($rawBody));
@@ -215,6 +292,7 @@ if (!defined('WINGO_API_LIB')) {
                     $last = intval(substr(strval($number), -1));
                     $number = $last;
                 }
+                if ($colour !== null) $colour = wingo_api_normalise_colour($colour);
                 $candidates[] = ['period' => $period, 'number' => $number, 'colour' => $colour];
             }
             if (count($candidates) > 0) break; // first matching container wins
@@ -223,36 +301,26 @@ if (!defined('WINGO_API_LIB')) {
     }
 
     /* ---------------------------------------------------------
-     * HTTP fetch — DIRECT + PROXY CHAIN with memory
-     * Path list: [0]=direct, [1..N]=proxy templates from config
-     * (placeholders {URL} raw / {URL_ENC} urlencoded).
-     * The path that last succeeded is tried first (persisted).
-     * Returns: ['ok','candidates','raw','latency_ms','error',
-     *           'path_used','url_used']
+     * HTTP fetch — DIRECT ONLY (v3, no proxies).
+     * One short-timeout attempt per call; results cached 6s per
+     * game; circuit breaker opens for 60s after 3 consecutive
+     * failures so the cron loop NEVER hangs on an unreachable API.
+     * Returns: ['ok','candidates','raw','latency_ms','error']
      * --------------------------------------------------------- */
-    function wingo_api_default_proxies() {
-        return [
-            'https://api.allorigins.win/raw?url={URL_ENC}',
-            'https://api.codetabs.com/v1/proxy?quest={URL_ENC}',
-            'https://corsproxy.io/?url={URL_ENC}',
-            'https://cors.eu.org/{URL}',
-        ];
-    }
-
     function wingo_api_fetch_feed($conn, $gameKey, $forceFresh = false) {
         static $cache = [];
         static $breaker = [];
 
         $cfg = wingo_api_get_config($conn);
         $fail = ['ok' => false, 'candidates' => [], 'raw' => '', 'latency_ms' => 0,
-                 'error' => 'no config', 'path_used' => null, 'url_used' => null];
+                 'error' => 'no config'];
         if (!$cfg) return $fail;
 
         $map = ['30s' => 'param_30s', '1m' => 'param_1m', '3m' => 'param_3m', '5m' => 'param_5m', '10m' => 'param_10m'];
         $typeParam = isset($map[$gameKey]) ? $cfg[$map[$gameKey]] : '';
         $base = rtrim(trim($cfg['api_base']), '?&');
         $key  = trim($cfg['api_key']);
-        $timeout = max(3, intval($cfg['timeout_sec']));
+        $timeout = max(2, min(15, intval($cfg['timeout_sec'])));
         $sep = (strpos($base, '?') === false) ? '?' : '&';
         $url = $base . $sep . 'type=' . urlencode($typeParam) . '&api_key=' . urlencode($key);
 
@@ -268,82 +336,33 @@ if (!defined('WINGO_API_LIB')) {
             return $data;
         }
 
-        // ---- build path list -----------------------------------
-        $tpls = [];
-        if (isset($cfg['proxy_tpls']) && trim(strval($cfg['proxy_tpls'])) !== '') {
-            $tpls = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', strval($cfg['proxy_tpls'])))));
-        }
-        if (count($tpls) === 0) $tpls = wingo_api_default_proxies();
-
-        $paths = [0 => ['kind' => 'direct', 'url' => $url]];
-        foreach ($tpls as $i => $tpl) {
-            if (strpos($tpl, '{URL}') === false && strpos($tpl, '{URL_ENC}') === false) continue;
-            $paths[$i + 1] = ['kind' => 'proxy', 'tpl' => $tpl];
-        }
-
-        // try last-good path first, then direct, then the rest
-        $order = [];
-        $lg = intval($cfg['last_good_path']);
-        if ($lg > 0 && isset($paths[$lg])) $order[] = $lg;
-        if (!in_array(0, $order)) $order[] = 0;
-        foreach (array_keys($paths) as $idx) { if (!in_array($idx, $order)) $order[] = $idx; }
-
-        // ---- attempt chain -------------------------------------
         $t0 = microtime(true);
-        $attempts = [];
-        $success = null;
-        $triesPerPath = ($forceFresh ? 1 : 2);
-        foreach ($order as $idx) {
-            $p = $paths[$idx];
-            for ($attempt = 1; $attempt <= $triesPerPath; $attempt++) {
-                $target = $p['url'];
-                if ($p['kind'] === 'proxy') {
-                    $target = str_replace(['{URL_ENC}', '{URL}'], [urlencode($url), $url], $p['tpl']);
-                }
-                $ch = curl_init($target);
-                curl_setopt_array($ch, [
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_TIMEOUT        => $timeout,
-                    CURLOPT_CONNECTTIMEOUT => $timeout,
-                    CURLOPT_FOLLOWLOCATION => true,
-                    CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
-                    CURLOPT_HTTPHEADER     => ['Accept: application/json, text/plain, */*'],
-                ]);
-                $raw = curl_exec($ch);
-                $cerrno = curl_errno($ch);
-                $cerrmsg = curl_error($ch);
-                $httpCode = intval(curl_getinfo($ch, CURLINFO_RESPONSE_CODE));
-                curl_close($ch);
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => $timeout,
+            CURLOPT_CONNECTTIMEOUT => $timeout,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+            CURLOPT_HTTPHEADER     => ['Accept: application/json, text/plain, */*'],
+        ]);
+        $raw = curl_exec($ch);
+        $cerrno = curl_errno($ch);
+        $httpCode = intval(curl_getinfo($ch, CURLINFO_RESPONSE_CODE));
+        curl_close($ch);
+        $latency = intval(round((microtime(true) - $t0) * 1000));
 
-                $candidates = [];
-                $ok = false;
-                if ($cerrno === 0 && $httpCode >= 200 && $httpCode < 300 && trim(strval($raw)) !== '') {
-                    $candidates = wingo_api_parse_feed($raw);
-                    $ok = (count($candidates) > 0);
-                }
-                $attempts[] = '#'.$idx . ($p['kind'] === 'direct' ? '(direct)' : '(proxy)') .
-                    ' HTTP ' . $httpCode . ($cerrno ? ' curl#' . $cerrno : '') .
-                    ($ok ? ' ok(' . count($candidates) . ')' : '');
-                if ($ok) {
-                    $success = [
-                        'ok' => true, 'candidates' => $candidates, 'raw' => strval($raw),
-                        'latency_ms' => intval(round((microtime(true) - $t0) * 1000)),
-                        'error' => null, 'path_used' => $idx, 'url_used' => $target,
-                    ];
-                    break 2;
-                }
-                // only retry the SAME path when it timed out (not on 403-style blocks)
-                if ($cerrno !== 0) { continue; }
-                break;
-            }
+        $candidates = [];
+        $ok = false;
+        if ($cerrno === 0 && $httpCode >= 200 && $httpCode < 300 && trim(strval($raw)) !== '') {
+            $candidates = wingo_api_parse_feed($raw);
+            $ok = (count($candidates) > 0);
         }
 
-        if ($success !== null) {
-            if ($breaker[$gameKey]['fails'] > 0 || intval($cfg['last_good_path']) !== intval($success['path_used'])) {
-                $breaker[$gameKey]['fails'] = 0;
-                mysqli_query($conn, "UPDATE `wingo_api_config` SET `last_good_path`=" . intval($success['path_used']) . " WHERE id=1");
-                $cfg['last_good_path'] = $success['path_used'];
-            }
+        if ($ok) {
+            $breaker[$gameKey]['fails'] = 0;
+            $success = ['ok' => true, 'candidates' => $candidates, 'raw' => strval($raw),
+                        'latency_ms' => $latency, 'error' => null];
             $cache[$gameKey] = ['t' => time(), 'data' => $success];
             return $success;
         }
@@ -351,8 +370,9 @@ if (!defined('WINGO_API_LIB')) {
         $breaker[$gameKey]['fails']++;
         $breaker[$gameKey]['last'] = time();
         $data = $fail;
-        $data['error'] = 'all paths failed: ' . implode(' | ', array_slice($attempts, 0, 6));
-        $data['latency_ms'] = intval(round((microtime(true) - $t0) * 1000));
+        $data['error'] = 'direct fetch failed: HTTP ' . $httpCode .
+            ($cerrno ? ' curl#' . $cerrno : '') . ' (' . $latency . 'ms)';
+        $data['latency_ms'] = $latency;
         $cache[$gameKey] = ['t' => time(), 'data' => $data];
         return $data;
     }
@@ -381,13 +401,13 @@ if (!defined('WINGO_API_LIB')) {
     }
 
     /* ---------------------------------------------------------
-     * MAIN RESOLVER — returns number from API for a local period
-     * The local period id IS the API issueNumber (same scheme),
-     * so matching is exact-string first. If the feed has not
-     * published the slot yet, retry once fresh, then give up
+     * MAIN RESOLVER — returns number + colour from the API for a
+     * local period. The local period id IS the API issueNumber
+     * (same scheme), so matching is exact-string. If the feed has
+     * not published the slot yet, retry once fresh, then give up
      * (caller falls back to the auto algorithm — never stalls,
      * never applies a wrong period's number).
-     * Return: ['number'=>int, 'colour'=>str|null, 'api_period'=>str|null, 'status'=>str]
+     * Return: ['number'=>int, 'colour'=>str|null, 'api_period'=>str, 'status'=>'used']
      *         or null (use fallback algorithm)
      * --------------------------------------------------------- */
     function wingo_api_resolve($conn, $gameKey, $localPeriodId) {
@@ -401,7 +421,7 @@ if (!defined('WINGO_API_LIB')) {
             foreach ($fetch['candidates'] as $c) {
                 if ($c['period'] !== null && strcasecmp($c['period'], $localPeriodId) === 0) {
                     wingo_api_log_event($conn, $gameKey, $localPeriodId, $c['period'], $c['number'], $c['colour'],
-                        'used', 'API result applied (exact issueNumber match, path #' . $fetch['path_used'] . ')', $fetch['latency_ms']);
+                        'used', 'API result applied (exact issueNumber match)', $fetch['latency_ms']);
                     return ['number' => $c['number'], 'colour' => $c['colour'], 'api_period' => $c['period'], 'status' => 'used'];
                 }
             }
@@ -412,7 +432,7 @@ if (!defined('WINGO_API_LIB')) {
                 foreach ($retry['candidates'] as $c) {
                     if ($c['period'] !== null && strcasecmp($c['period'], $localPeriodId) === 0) {
                         wingo_api_log_event($conn, $gameKey, $localPeriodId, $c['period'], $c['number'], $c['colour'],
-                            'used', 'API result applied after retry (path #' . $retry['path_used'] . ')', $retry['latency_ms']);
+                            'used', 'API result applied after retry', $retry['latency_ms']);
                         return ['number' => $c['number'], 'colour' => $c['colour'], 'api_period' => $c['period'], 'status' => 'used'];
                     }
                 }

@@ -1,7 +1,10 @@
 <?php
 /**
- * WinGo API Settings - live test endpoint (admin only)
+ * WinGo API Settings - live direct-hit test endpoint (admin only)
  * POST game=30s|1m|3m|5m|10m
+ * Hits the configured API directly (no proxy), returns the newest
+ * result (issueNumber / number / colour) and the alignment of the
+ * local period with the API issueNumber scheme.
  */
 session_start();
 if (empty($_SESSION['unohs'])) {
@@ -36,24 +39,32 @@ if ($r && mysqli_num_rows($r) > 0) {
     $localPeriod = mysqli_fetch_assoc($r)['atadaaidi'];
 }
 
-// live fetch (bypass cache)
+// live fetch (bypass cache) — direct hit
 $fetch = wingo_api_fetch_feed($conn, $game, true);
 
-$apiPeriod = null; $number = null; $colour = null; $match = 'unknown';
+$apiPeriod = null; $number = null; $colour = null; $match = 'unknown'; $nextPeriod = null;
 if ($fetch['ok'] && count($fetch['candidates']) > 0) {
     $latest = $fetch['candidates'][0];
     $apiPeriod = $latest['period'];
     $number = $latest['number'];
     $colour = $latest['colour'];
+    if ($apiPeriod !== null) {
+        $nextPeriod = wingo_api_next_issue($apiPeriod);
+    }
     if ($localPeriod !== '-' && $apiPeriod !== null) {
-        // ids follow the same scheme now -> exact string match first
+        // ids follow the same scheme -> exact string match first
         if (strcasecmp(strval($localPeriod), strval($apiPeriod)) === 0) {
             $match = 'yes';
         } else {
-            $ourSerial = wingo_api_serial_of($localPeriod);
-            $apiSerial = wingo_api_serial_of($apiPeriod);
-            if ($ourSerial !== null && $apiSerial !== null) {
-                $match = ($ourSerial === $apiSerial) ? 'yes' : 'no';
+            // local period should be exactly latest + 1 (open slot)
+            if ($nextPeriod !== null && strcasecmp(strval($localPeriod), strval($nextPeriod)) === 0) {
+                $match = 'yes';
+            } else {
+                $ourSerial = wingo_api_serial_of($localPeriod);
+                $apiSerial = wingo_api_serial_of($apiPeriod);
+                if ($ourSerial !== null && $apiSerial !== null) {
+                    $match = (($ourSerial === $apiSerial) || ($ourSerial === $apiSerial + 1)) ? 'yes' : 'no';
+                }
             }
         }
     }
@@ -63,11 +74,11 @@ echo json_encode([
     'ok'           => (bool) $fetch['ok'],
     'error'        => $fetch['error'],
     'latency_ms'   => $fetch['latency_ms'],
-    'path_used'    => isset($fetch['path_used']) ? $fetch['path_used'] : null,
-    'url_used'     => isset($fetch['url_used']) ? $fetch['url_used'] : null,
+    'mode'         => 'direct',
     'api_period'   => $apiPeriod,
     'number'       => $number,
     'colour'       => $colour,
+    'next_period'  => $nextPeriod,
     'local_period' => $localPeriod,
     'match'        => $match,
     'candidates'   => array_slice($fetch['candidates'], 0, 5),
