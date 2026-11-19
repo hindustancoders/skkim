@@ -36,6 +36,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
  * ========================================= */
 watchpay_log("Payin webhook received (POST)", $_POST);
 
+/* Official callback IPs (docs + merchant group, Oct 2025 domain move):
+   18.141.88.123 (new) + 47.131.79.37 (old, kept). Signature is the real
+   security layer; this only logs unexpected sources for monitoring. */
+$watchpayCallbackIps = array('18.141.88.123', '47.131.79.37');
+$watchpaySrcIp = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? ($_SERVER['REMOTE_ADDR'] ?? '');
+$watchpaySrcIp = trim(explode(',', $watchpaySrcIp)[0]);
+if ($watchpaySrcIp !== '' && !in_array($watchpaySrcIp, $watchpayCallbackIps, true)) {
+    watchpay_log("Payin webhook from NON-OFFICIAL IP $watchpaySrcIp (signature check below is decisive)");
+}
+
 $data = $_POST;
 if (empty($data)) {
     $raw = file_get_contents("php://input");

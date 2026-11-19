@@ -83,7 +83,7 @@ if ($currentMinute % 5 === 0) {
 
 // ==========================================
 // 3.5 Gateway Payout Status Sync (every 5 minutes)
-// WatchPay: api.watchglb.com/query/transfer
+// WatchPay: api.wataiglobal.com/query/transfer
 // QwackPay: qwackpay.com/api/v1/order/query
 // ==========================================
 if ($currentMinute % 5 === 0) {

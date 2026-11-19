@@ -26,10 +26,24 @@ function watchpay_action_payout($conn, $withdrawId, $accountId, $ifsc = '') {
         return array('ok' => false, 'msg' => "Amount out of range for this account ({$acct['min_payout']} - {$acct['max_payout']})");
     }
 
-    /* bank card info */
+    /* bank account info
+       FIX: the SPA saves bank accounts in user_withdraw_accounts
+       (SetWithdrawalBankCard / SetWithdrawalUsdt; getWithdrawals.php lists from
+       it and NewSetWithdrawal stores its id in khateshonu). user_bankcards only
+       holds legacy e-wallet rows (SetWithdrawalWallet). Try the right table
+       first, then fall back. */
     $bankCardId = intval($w['khateshonu']);
-    $bc = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM user_bankcards WHERE id = " . $bankCardId . " LIMIT 1"));
-    if (!$bc) return array('ok' => false, 'msg' => 'User bank card not found');
+    $bc = mysqli_fetch_assoc(mysqli_query($conn,
+        "SELECT khatesankhye AS account, phalanubhavi AS name, kod AS ifsc, khatehesaru AS bank_name
+         FROM user_withdraw_accounts WHERE shonu = " . $bankCardId . " LIMIT 1"));
+    if (!$bc) {
+        $bc = mysqli_fetch_assoc(mysqli_query($conn,
+            "SELECT account, name, '' AS ifsc, '' AS bank_name FROM user_bankcards WHERE id = " . $bankCardId . " LIMIT 1"));
+    }
+    if (!$bc) return array('ok' => false, 'msg' => 'User bank account not found');
+
+    /* India payouts require IFSC in remark: admin input first, else stored IFSC */
+    if (trim($ifsc) === '' && !empty($bc['ifsc'])) $ifsc = $bc['ifsc'];
 
     /* payout amount = amount minus fee if configured */
     $fee = round($amount * (float)$acct['payout_fee_percent'] / 100, 2);

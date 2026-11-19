@@ -26,10 +26,22 @@ function qwackpay_action_payout($conn, $withdrawId, $accountId, $ifsc = '') {
         return array('ok' => false, 'msg' => "Amount out of range for this account ({$acct['min_payout']} - {$acct['max_payout']})");
     }
 
-    /* bank card info */
+    /* bank account info
+       FIX: the SPA saves bank accounts in user_withdraw_accounts (see
+       watchpay_actions.php note); user_bankcards only holds legacy e-wallet
+       rows. Try the right table first, then fall back. */
     $bankCardId = intval($w['khateshonu']);
-    $bc = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM user_bankcards WHERE id = " . $bankCardId . " LIMIT 1"));
-    if (!$bc) return array('ok' => false, 'msg' => 'User bank card not found');
+    $bc = mysqli_fetch_assoc(mysqli_query($conn,
+        "SELECT khatesankhye AS account, phalanubhavi AS name, kod AS ifsc, khatehesaru AS bank_name
+         FROM user_withdraw_accounts WHERE shonu = " . $bankCardId . " LIMIT 1"));
+    if (!$bc) {
+        $bc = mysqli_fetch_assoc(mysqli_query($conn,
+            "SELECT account, name, '' AS ifsc, '' AS bank_name FROM user_bankcards WHERE id = " . $bankCardId . " LIMIT 1"));
+    }
+    if (!$bc) return array('ok' => false, 'msg' => 'User bank account not found');
+
+    /* IFSC: admin input first, else the IFSC stored with the bank account */
+    if (trim($ifsc) === '' && !empty($bc['ifsc'])) $ifsc = $bc['ifsc'];
     if (trim($ifsc) === '') return array('ok' => false, 'msg' => 'IFSC code is required for QwackPay payout');
 
     /* payout amount = amount - percent fee - flat fee (QwackPay rate: 3% + 6) */

@@ -1,6 +1,6 @@
 <?php
 /**
- * WatchPay Gateway Library (api.watchglb.com)
+ * WatchPay Gateway Library (api.wataiglobal.com)
  * Official docs: https://www.showdoc.com.cn/WatchPay (password: watchpay277)
  *
  * Signature algorithm (from official docs):
@@ -12,10 +12,10 @@
  *  6. Empty params do NOT participate in signature and must NOT be submitted
  *
  * Endpoints:
- *  - Payin  (order):       https://api.watchglb.com/pay/web
- *  - Payout (transfer):    https://api.watchglb.com/pay/transfer
- *  - Payout query:         https://api.watchglb.com/query/transfer
- *  - Balance query:        https://api.watchglb.com/query/balance
+ *  - Payin  (order):       https://api.wataiglobal.com/pay/web
+ *  - Payout (transfer):    https://api.wataiglobal.com/pay/transfer
+ *  - Payout query:         https://api.wataiglobal.com/query/transfer
+ *  - Balance query:        https://api.wataiglobal.com/query/balance
  */
 
 if (defined('WATCHPAY_LIB_LOADED')) return;
@@ -125,6 +125,11 @@ function watchpay_http_post($url, $postData) {
  * API operations
  * --------------------------------------------------------------- */
 
+/* Default India payout bank code per official docs (银行编码 -> 代付固定填 IDPT0001) */
+if (!defined('WATCHPAY_DEFAULT_PAYOUT_BANK_CODE')) {
+    define('WATCHPAY_DEFAULT_PAYOUT_BANK_CODE', 'IDPT0001');
+}
+
 /**
  * Create payin order. Returns array with keys:
  * ok(bool), payInfo, orderNo, msg, raw
@@ -172,7 +177,7 @@ function watchpay_create_payout($acct, $mchTransferId, $amount, $receiveName, $r
         'mch_transferId'   => $mchTransferId,
         'transfer_amount'  => (string)intval(round((float)$amount)),
         'apply_date'       => date('Y-m-d H:i:s'),
-        'bank_code'        => $bankCode !== '' ? $bankCode : $acct['bank_code_payout'],
+        'bank_code'        => $bankCode !== '' ? $bankCode : (!empty($acct['bank_code_payout']) ? $acct['bank_code_payout'] : WATCHPAY_DEFAULT_PAYOUT_BANK_CODE),
         'receive_name'     => $receiveName,
         'receive_account'  => $receiveAccount,
     );

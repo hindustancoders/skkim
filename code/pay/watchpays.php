@@ -1,6 +1,6 @@
 <?php
 /**
- * WatchPay Pay-in Order Creation (api.watchglb.com/pay/web)
+ * WatchPay Pay-in Order Creation (api.wataiglobal.com/pay/web)
  * Official docs: https://www.showdoc.com.cn/WatchPay
  *
  * Multi-account: /pay/watchpays?a={account_id}  (default account when omitted)

@@ -56,9 +56,17 @@ Admin user   : 1234567890
 Admin pass   : admin123        (change it: Admin > Finance > adminpass.php)
 
 Payment gateways (Admin > Finance):
-- WatchPay Accounts : multi-account payin/payout (api.watchglb.com)
+- WatchPay Accounts : multi-account payin/payout (api.wataiglobal.com)
+  * DOMAIN MOVED (Oct 15): old api.watchglb.com is CLOSED - only use
+    api.wataiglobal.com (payin /pay/web, payout /pay/transfer,
+    query /query/transfer, /query/balance). Merchant portal:
+    https://mer.wataiglobal.com
+  * WatchPay gateway callback IPs (whitelist on OUR firewall):
+    18.141.88.123 (new) + 47.131.79.37 (old - keep both)
+  * Payin test merchant 222887002 (pay_type=101) configured for staging.
+    For LIVE: add real merchant from portal -> new account row.
 - QwackPay Accounts : multi-account payin/payout (qwackpay.com)
-  * Merchant ID 636055076 already added
+  * Merchant ID 681551699 already added (live-tested balance OK)
   * Paste the API Key from the QwackPay merchant portal (Google-verified)
     into the account -> Save. Deposit channel goes live instantly.
   * PAYOUT needs your server IP whitelisted in the QwackPay merchant portal

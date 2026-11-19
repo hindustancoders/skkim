@@ -155,7 +155,7 @@ include("navtop.php");
                                 </div>
                                 <div class="col-md-4 form-group">
                                     <label>Merchant ID *</label>
-                                    <input class="form-control" name="merchant_id" required value="<?php echo htmlspecialchars($edit['merchant_id'] ?? ''); ?>" placeholder="636055076">
+                                    <input class="form-control" name="merchant_id" required value="<?php echo htmlspecialchars($edit['merchant_id'] ?? ''); ?>" placeholder="681551699">
                                 </div>
                                 <div class="col-md-4 form-group">
                                     <label>API Key * (merchant portal, Google-verified)</label>

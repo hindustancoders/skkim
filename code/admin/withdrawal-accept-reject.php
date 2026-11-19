@@ -1,56 +1,56 @@
 <?php
-	session_start();
-	if(empty($_SESSION['unohs'])){
-		header("location:index.php?msg=unauthorized");
-		exit;
-	}
+        session_start();
+        if(empty($_SESSION['unohs'])){
+                header("location:index.php?msg=unauthorized");
+                exit;
+        }
 ?>
 <?php
-	include ("conn.php");
+        include ("conn.php");
 
-	if(isset($_GET['id']) && !empty($_GET['id'])){
-		$id = intval($_GET['id']); // Convert to integer to prevent SQL injection
-		
-		$sql = "SELECT 
-			users.mobile,
-			users.email,
-			user_withdraw_accounts.phalanubhavi,
-			user_withdraw_accounts.kod,
-			user_withdraw_accounts.khatehesaru,
-			user_withdraw_accounts.khatesankhye,
-			withdraw_requests.shonu,
-			withdraw_requests.motta,
-			withdraw_requests.sthiti,
-			withdraw_requests.dinankavannuracisi,
-			bankcard.name AS beneficiaryName,
-			bankcard.type AS payoutType,
-			bankcard.account AS accountNumber
-		FROM withdraw_requests
-		LEFT JOIN users ON users.id = withdraw_requests.balakedara
-		LEFT JOIN user_withdraw_accounts ON user_withdraw_accounts.shonu = withdraw_requests.khateshonu
-		LEFT JOIN user_bankcards ON bankcard.id = withdraw_requests.khateshonu
-		WHERE CAST(withdraw_requests.shonu AS UNSIGNED) = $id
-		LIMIT 1";
+        if(isset($_GET['id']) && !empty($_GET['id'])){
+                $id = intval($_GET['id']); // Convert to integer to prevent SQL injection
+                
+                $sql = "SELECT 
+                        users.mobile,
+                        users.email,
+                        user_withdraw_accounts.phalanubhavi,
+                        user_withdraw_accounts.kod,
+                        user_withdraw_accounts.khatehesaru,
+                        user_withdraw_accounts.khatesankhye,
+                        withdraw_requests.shonu,
+                        withdraw_requests.motta,
+                        withdraw_requests.sthiti,
+                        withdraw_requests.dinankavannuracisi,
+                        COALESCE(NULLIF(user_withdraw_accounts.phalanubhavi, ''), bankcard.name) AS beneficiaryName,
+                        bankcard.type AS payoutType,
+                        COALESCE(NULLIF(user_withdraw_accounts.khatesankhye, ''), bankcard.account) AS accountNumber
+                FROM withdraw_requests
+                LEFT JOIN users ON users.id = withdraw_requests.balakedara
+                LEFT JOIN user_withdraw_accounts ON user_withdraw_accounts.shonu = withdraw_requests.khateshonu
+                LEFT JOIN user_bankcards AS bankcard ON bankcard.id = withdraw_requests.khateshonu
+                WHERE CAST(withdraw_requests.shonu AS UNSIGNED) = $id
+                LIMIT 1";
 
-		$Query = mysqli_query($conn, $sql);
-		
-		if (!$Query) {
-			// Handle database query error
-			echo "Error in query: " . mysqli_error($conn);
-			exit();
-		}
-		
-		$Result = mysqli_fetch_assoc($Query);
-		
-		if (!$Result) {
-			// Handle no data found
-			echo "No withdrawal request found with the provided ID.";
-			exit();
-		}
-	} else {
-		echo "Invalid or missing withdrawal ID.";
-		exit();
-	}
+                $Query = mysqli_query($conn, $sql);
+                
+                if (!$Query) {
+                        // Handle database query error
+                        echo "Error in query: " . mysqli_error($conn);
+                        exit();
+                }
+                
+                $Result = mysqli_fetch_assoc($Query);
+                
+                if (!$Result) {
+                        // Handle no data found
+                        echo "No withdrawal request found with the provided ID.";
+                        exit();
+                }
+        } else {
+                echo "Invalid or missing withdrawal ID.";
+                exit();
+        }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -72,7 +72,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.2.3/css/fixedHeader.dataTables.min.css"> 
   <link rel="shortcut icon" href="images/favicon.png" />
   <style>
-	.cool-input {
+        .cool-input {
         border: 2px solid #007bff;
         border-radius: 0.25rem;
         padding: 0.5rem 1rem;
@@ -87,7 +87,7 @@
         color: #6c757d;
         opacity: 1;
     }
-	.cool-button {
+        .cool-button {
         padding: 0.5rem 1rem;
         font-size: 1rem;
         border-radius: 0.25rem;
@@ -101,23 +101,23 @@
         background-color: #343a40;
         color: #fff;
     }
-	#copied{
-		visibility: hidden;
-		z-index: 1;
-		position: fixed;
-		bottom: 50%;
-		background-color: #333;
-		color: #fff;
-		border-radius: 6px;
-		padding: 16px;
-		max-width: 250px;
-		font-size: 17px;
-	}	   
-	#copied.show {
-		visibility: visible;
-		-webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
-		animation: fadein 0.5s, fadeout 0.5s 2.5s;
-	}
+        #copied{
+                visibility: hidden;
+                z-index: 1;
+                position: fixed;
+                bottom: 50%;
+                background-color: #333;
+                color: #fff;
+                border-radius: 6px;
+                padding: 16px;
+                max-width: 250px;
+                font-size: 17px;
+        }          
+        #copied.show {
+                visibility: visible;
+                -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+                animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
   </style>
 </head>
 <body>
@@ -170,88 +170,88 @@
             <div class="col-sm-12 mb-4 mb-xl-0">
               <h4 class="font-weight-bold text-dark">Withdraw Accept/Reject</h4>
             </div>
-          </div> 		  		  		  			
-		  <div class="row">
+          </div>                                                                        
+                  <div class="row">
             <div class="col-sm-12">
-				<h3 class="box-title text-center text-danger">
-					<?php echo 'Payout Details'; ?>
-				</h3>
-				<table class="table">
-				  <tbody>
-					<tr>
-						<td style="color: blue; font-size:25px;" scope="col">Mobile:</td>
-						<td style="color: blue; font-size:25px;" scope="col"><?php echo $Result['mobile']; ?></td>					  
-					</tr>				  				  
-					<tr>					  
-						<td style="color: blue; font-size:25px;">Date:</td>
-						<td style="color: blue; font-size:25px;"><?php echo date('d-m-Y', strtotime($Result['dinankavannuracisi'])); ?></td>					  
-					</tr>
-					<tr>
-						<td style="color: blue; font-size:25px;" scope="col">Amount:</td>
-						<td style="color: blue; font-size:25px;" scope="col"><?php echo number_format($Result['motta'], 2); ?></td>						  
-					</tr>
-					<tr>
-						<td style="color: blue; font-size:25px;" scope="col">Beneficiary Name:</td>
-						<td style="color: blue; font-size:25px;" scope="col"><?php echo $Result['beneficiaryName'] ?? ''; ?></td>						  
-					</tr>
-					<tr>
-						<td style="color: blue; font-size:25px;" scope="col">Payout Type:</td>
-						<td style="color: blue; font-size:25px;" scope="col">
-							<?php
-							switch ($Result['payoutType'] ?? 0) {
-								case 23:
-									echo 'EASYPAISA';
-									break;
-								case 24:
-									echo 'JAZZCASH';
-									break;
-								case 1:
-									echo 'BANK CARD';
-									break;
-								case 3:
-									echo 'USDT';
-									break;
-								default:
-									echo 'OTHER';
-							}
-							?>
-						</td>						  
-					</tr>
-					<tr>
-	                <td style="color: blue; font-size:25px;" scope="col">Account Number:</td>
-	                <td style="color: blue; font-size:25px;" scope="col"><?php echo $Result['accountNumber']; ?></td>						  
+                                <h3 class="box-title text-center text-danger">
+                                        <?php echo 'Payout Details'; ?>
+                                </h3>
+                                <table class="table">
+                                  <tbody>
+                                        <tr>
+                                                <td style="color: blue; font-size:25px;" scope="col">Mobile:</td>
+                                                <td style="color: blue; font-size:25px;" scope="col"><?php echo $Result['mobile']; ?></td>                                        
+                                        </tr>                                                             
+                                        <tr>                                      
+                                                <td style="color: blue; font-size:25px;">Date:</td>
+                                                <td style="color: blue; font-size:25px;"><?php echo date('d-m-Y', strtotime($Result['dinankavannuracisi'])); ?></td>                                      
+                                        </tr>
+                                        <tr>
+                                                <td style="color: blue; font-size:25px;" scope="col">Amount:</td>
+                                                <td style="color: blue; font-size:25px;" scope="col"><?php echo number_format($Result['motta'], 2); ?></td>                                               
+                                        </tr>
+                                        <tr>
+                                                <td style="color: blue; font-size:25px;" scope="col">Beneficiary Name:</td>
+                                                <td style="color: blue; font-size:25px;" scope="col"><?php echo $Result['beneficiaryName'] ?? ''; ?></td>                                                 
+                                        </tr>
+                                        <tr>
+                                                <td style="color: blue; font-size:25px;" scope="col">Payout Type:</td>
+                                                <td style="color: blue; font-size:25px;" scope="col">
+                                                        <?php
+                                                        switch ($Result['payoutType'] ?? 0) {
+                                                                case 23:
+                                                                        echo 'EASYPAISA';
+                                                                        break;
+                                                                case 24:
+                                                                        echo 'JAZZCASH';
+                                                                        break;
+                                                                case 1:
+                                                                        echo 'BANK CARD';
+                                                                        break;
+                                                                case 3:
+                                                                        echo 'USDT';
+                                                                        break;
+                                                                default:
+                                                                        echo 'OTHER';
+                                                        }
+                                                        ?>
+                                                </td>                                             
+                                        </tr>
+                                        <tr>
+                        <td style="color: blue; font-size:25px;" scope="col">Account Number:</td>
+                        <td style="color: blue; font-size:25px;" scope="col"><?php echo $Result['accountNumber']; ?></td>                                                 
                    </tr>
-				</table>
+                                </table>
             </div>
-			<div class="col-sm-12">
-				<?php if ($Result['sthiti'] == 0) { ?>
-						<div class="d-flex">
-						  <div class="col-sm-6">
-							<a href="javascript:void(0);" class="btn btn-success btn-block" onClick="acceptrejectconfirm(<?php echo $Result['shonu']; ?>,'accept');">
-							  <strong><i class="fa fa-check"></i>Agree</strong>
-							</a>
-						  </div>
-						  <div class="col-sm-6">
-							<a href="javascript:void(0);" class="btn btn-danger btn-block" onClick="acceptrejectconfirm(<?php echo $Result['shonu']; ?>,'reject');">
-							  <strong><i class="fa fa-check"></i>Reject</strong>
-							</a>
-						  </div>
-						</div>
-				<?php 
-					}
-				?>													
+                        <div class="col-sm-12">
+                                <?php if ($Result['sthiti'] == 0) { ?>
+                                                <div class="d-flex">
+                                                  <div class="col-sm-6">
+                                                        <a href="javascript:void(0);" class="btn btn-success btn-block" onClick="acceptrejectconfirm(<?php echo $Result['shonu']; ?>,'accept');">
+                                                          <strong><i class="fa fa-check"></i>Agree</strong>
+                                                        </a>
+                                                  </div>
+                                                  <div class="col-sm-6">
+                                                        <a href="javascript:void(0);" class="btn btn-danger btn-block" onClick="acceptrejectconfirm(<?php echo $Result['shonu']; ?>,'reject');">
+                                                          <strong><i class="fa fa-check"></i>Reject</strong>
+                                                        </a>
+                                                  </div>
+                                                </div>
+                                <?php 
+                                        }
+                                ?>                                                                                                      
             </div>
-          </div>		  
-		</div>
-		<footer class="footer">
-			<div class="d-sm-flex justify-content-center justify-content-sm-between">
-				<span class="text-muted d-block text-center text-sm-left d-sm-inline-block">Copyright © bharatgames.online 2024</span>
-			</div>
-		</footer>
+          </div>                  
+                </div>
+                <footer class="footer">
+                        <div class="d-sm-flex justify-content-center justify-content-sm-between">
+                                <span class="text-muted d-block text-center text-sm-left d-sm-inline-block">Copyright © bharatgames.online 2024</span>
+                        </div>
+                </footer>
       </div>     
     </div>
   </div>
-	<div id="confirm" class="modal fade" role="dialog">
+        <div id="confirm" class="modal fade" role="dialog">
     <div class="modal-dialog modal-sm" role="document">
         <div class="modal-content" style="padding:8px;">
             <div class="modal-body text-center">

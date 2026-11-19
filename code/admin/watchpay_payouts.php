@@ -59,10 +59,16 @@ $accounts = mysqli_query($conn, $gateway === 'qwackpay'
     : "SELECT * FROM watchpay_accounts WHERE status=1 ORDER BY is_default DESC, id ASC");
 $payouts = mysqli_query($conn, "SELECT po.*, u.mobile FROM payout_orders po LEFT JOIN users u ON u.id = po.user_id ORDER BY po.id DESC LIMIT 100");
 
-/* pending withdrawals (Applied or Processing) */
-$pending = mysqli_query($conn, "SELECT w.*, u.mobile, b.account AS bank_account, b.name AS bank_name
+/* pending withdrawals (Applied or Processing)
+   FIX: bank accounts saved from the SPA live in user_withdraw_accounts
+   (khateshonu points there); user_bankcards only has legacy e-wallet rows. */
+$pending = mysqli_query($conn, "SELECT w.*, u.mobile,
+        COALESCE(NULLIF(wda.khatesankhye, ''), b.account) AS bank_account,
+        COALESCE(NULLIF(wda.phalanubhavi, ''), b.name) AS bank_name,
+        COALESCE(NULLIF(wda.kod, ''), '') AS bank_ifsc
     FROM withdraw_requests w
     LEFT JOIN users u ON u.id = w.balakedara
+    LEFT JOIN user_withdraw_accounts wda ON wda.shonu = w.khateshonu
     LEFT JOIN user_bankcards b ON b.id = w.khateshonu
     WHERE w.sthiti IN ('0','3')
     ORDER BY w.shonu DESC LIMIT 100");

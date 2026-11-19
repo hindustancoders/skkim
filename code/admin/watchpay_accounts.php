@@ -25,10 +25,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($fields as $f) {
             $vals[$f] = mysqli_real_escape_string($conn, trim($_POST[$f] ?? ''));
         }
-        if ($vals['payin_url'] === '') $vals['payin_url'] = 'https://api.watchglb.com/pay/web';
-        if ($vals['payout_url'] === '') $vals['payout_url'] = 'https://api.watchglb.com/pay/transfer';
-        if ($vals['payout_query_url'] === '') $vals['payout_query_url'] = 'https://api.watchglb.com/query/transfer';
-        if ($vals['balance_query_url'] === '') $vals['balance_query_url'] = 'https://api.watchglb.com/query/balance';
+        if ($vals['payin_url'] === '') $vals['payin_url'] = 'https://api.wataiglobal.com/pay/web';
+        if ($vals['payout_url'] === '') $vals['payout_url'] = 'https://api.wataiglobal.com/pay/transfer';
+        if ($vals['payout_query_url'] === '') $vals['payout_query_url'] = 'https://api.wataiglobal.com/query/transfer';
+        if ($vals['balance_query_url'] === '') $vals['balance_query_url'] = 'https://api.wataiglobal.com/query/balance';
 
         $payinFee = floatval($_POST['payin_fee_percent'] ?? 0);
         $payoutFee = floatval($_POST['payout_fee_percent'] ?? 0);
@@ -93,7 +93,7 @@ include("navtop.php");
                         <div class="card-body">
                             <h4 class="card-title" style="font-weight:bold;">
                                 <i class="fa fa-credit-card"></i> WatchPay Gateway Accounts
-                                <small class="text-muted d-block">Advanced multi-account integration - api.watchglb.com (payin, payout, query, balance, callbacks)</small>
+                                <small class="text-muted d-block">Advanced multi-account integration - api.wataiglobal.com (payin, payout, query, balance, callbacks)</small>
                             </h4>
 
                             <?php if ($msg): ?>
@@ -178,19 +178,19 @@ include("navtop.php");
                                 </div>
                                 <div class="col-md-6 form-group">
                                     <label>Payin URL</label>
-                                    <input class="form-control" name="payin_url" value="<?php echo htmlspecialchars($edit['payin_url'] ?? 'https://api.watchglb.com/pay/web'); ?>">
+                                    <input class="form-control" name="payin_url" value="<?php echo htmlspecialchars($edit['payin_url'] ?? 'https://api.wataiglobal.com/pay/web'); ?>">
                                 </div>
                                 <div class="col-md-6 form-group">
                                     <label>Payout URL</label>
-                                    <input class="form-control" name="payout_url" value="<?php echo htmlspecialchars($edit['payout_url'] ?? 'https://api.watchglb.com/pay/transfer'); ?>">
+                                    <input class="form-control" name="payout_url" value="<?php echo htmlspecialchars($edit['payout_url'] ?? 'https://api.wataiglobal.com/pay/transfer'); ?>">
                                 </div>
                                 <div class="col-md-6 form-group">
                                     <label>Payout Query URL</label>
-                                    <input class="form-control" name="payout_query_url" value="<?php echo htmlspecialchars($edit['payout_query_url'] ?? 'https://api.watchglb.com/query/transfer'); ?>">
+                                    <input class="form-control" name="payout_query_url" value="<?php echo htmlspecialchars($edit['payout_query_url'] ?? 'https://api.wataiglobal.com/query/transfer'); ?>">
                                 </div>
                                 <div class="col-md-6 form-group">
                                     <label>Balance Query URL</label>
-                                    <input class="form-control" name="balance_query_url" value="<?php echo htmlspecialchars($edit['balance_query_url'] ?? 'https://api.watchglb.com/query/balance'); ?>">
+                                    <input class="form-control" name="balance_query_url" value="<?php echo htmlspecialchars($edit['balance_query_url'] ?? 'https://api.wataiglobal.com/query/balance'); ?>">
                                 </div>
                                 <div class="col-md-4 form-group">
                                     <label>Payout Bank Code (optional)</label>
@@ -240,11 +240,13 @@ include("navtop.php");
                                 </div>
                             </form>
 
-                            <div class="alert alert-secondary mt-4" style="font-size:12px;">
+                                <div class="alert alert-secondary mt-4" style="font-size:12px;">
                                 <b>Integration notes (official docs):</b><br>
-                                - Payin: POST <code>https://api.watchglb.com/pay/web</code> (MD5 signature, version=1.0 for JSON response)<br>
-                                - Payout: POST <code>https://api.watchglb.com/pay/transfer</code> (India requires IFSC in remark)<br>
+                                - Payin: POST <code>https://api.wataiglobal.com/pay/web</code> (MD5 signature, version=1.0 for JSON response)<br>
+                                - Payout: POST <code>https://api.wataiglobal.com/pay/transfer</code> (India requires IFSC in remark)<br>
                                 - Callbacks: <code>/pay/watchpays_callback.php</code> (payin notify_url), <code>/pay/watchpays_payout_callback.php</code> (payout back_url) - must return "success"<br>
+                                - Gateway callback IPs (firewall whitelist on our side): <code>18.141.88.123</code> (new), <code>47.131.79.37</code> (old, keep both)<br>
+                                - Merchant portal: <code>https://mer.wataiglobal.com</code> - payin key from portal home; payout key issued after IP whitelist with your business manager<br>
                                 - One integration supports unlimited merchant accounts - switch anytime using the star (DEFAULT) button.
                             </div>
                         </div>

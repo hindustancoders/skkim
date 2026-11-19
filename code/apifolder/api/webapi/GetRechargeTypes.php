@@ -84,26 +84,9 @@
                                                                         $data["rechargetypelist"][$idx]["sort"] = 90000 - $idx;
                                                                         $idx++;
                                                                 }
-                                                        } else {
-                                                                /* fallback: no account configured - show generic channel pointing to default handler */
-                                                                $data["rechargetypelist"][0]["payTypeID"] = 1023;
-                                                                $data["rechargetypelist"][0]["payID"] = (int)$payid;
-                                                                $data["rechargetypelist"][0]["payName"] = "WatchPay UPI";
-                                                                $data["rechargetypelist"][0]["paySysName"] = "Online Pay";
-                                                                $data["rechargetypelist"][0]["miniPrice"] = 100;
-                                                                $data["rechargetypelist"][0]["maxPrice"] = 50000;
-                                                                $data["rechargetypelist"][0]["scope"] = $scopeStr;
-                                                                $data["rechargetypelist"][0]["paySendUrl"] = $sites . "/pay/watchpays";
-                                                                $data["rechargetypelist"][0]["parameters"] = '';
-                                                                $data["rechargetypelist"][0]["startTime"] = "00:00";
-                                                                $data["rechargetypelist"][0]["endTime"] = "24:00";
-                                                                $data["rechargetypelist"][0]["rechargeRifts"] = 0.00;
-                                                                $data["rechargetypelist"][0]["c2cUnitAmount"] = null;
-                                                                $data["rechargetypelist"][0]["quickConfig"] = "";
-                                                                $data["rechargetypelist"][0]["quickConfigList"] = $quickList;
-                                                                $data["rechargetypelist"][0]["random"] = 0.819226;
-                                                                $data["rechargetypelist"][0]["sort"] = 90000;
                                                         }
+                                                        /* No active WatchPay account: channel intentionally hidden
+                                                           (never show a dead gateway channel to users). */
 
                                                         /* QwackPay Gateway Options - one channel per ACTIVE account (multi-account support).
                                                            Table qwackpay_accounts: admin can add unlimited merchant accounts. */
