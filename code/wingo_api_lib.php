@@ -88,6 +88,8 @@ if (!defined('WINGO_API_LIB')) {
         foreach (['30s','1m','3m','5m','10m'] as $__gk) {
             $__cj = 'feed_json_' . $__gk;
             $__ca = 'feed_at_' . $__gk;
+            $__fs = 'fail_streak_' . $__gk;
+            $__fu = 'fail_until_' . $__gk;
             $r1 = mysqli_query($conn, "SHOW COLUMNS FROM `wingo_api_config` LIKE '" . $__cj . "'");
             if ($r1 && mysqli_num_rows($r1) === 0) {
                 mysqli_query($conn, "ALTER TABLE `wingo_api_config` ADD COLUMN `" . $__cj . "` MEDIUMTEXT NULL");
@@ -95,6 +97,17 @@ if (!defined('WINGO_API_LIB')) {
             $r2 = mysqli_query($conn, "SHOW COLUMNS FROM `wingo_api_config` LIKE '" . $__ca . "'");
             if ($r2 && mysqli_num_rows($r2) === 0) {
                 mysqli_query($conn, "ALTER TABLE `wingo_api_config` ADD COLUMN `" . $__ca . "` INT NULL DEFAULT 0");
+            }
+            /* v5: PERSISTED circuit breaker — survives across processes so a
+               dead API is retried at most once/60s GLOBALLY, keeping the
+               settlement tick loop fast (no curl storms, no 10-20s history lag) */
+            $r3 = mysqli_query($conn, "SHOW COLUMNS FROM `wingo_api_config` LIKE '" . $__fs . "'");
+            if ($r3 && mysqli_num_rows($r3) === 0) {
+                mysqli_query($conn, "ALTER TABLE `wingo_api_config` ADD COLUMN `" . $__fs . "` INT NOT NULL DEFAULT 0");
+            }
+            $r4 = mysqli_query($conn, "SHOW COLUMNS FROM `wingo_api_config` LIKE '" . $__fu . "'");
+            if ($r4 && mysqli_num_rows($r4) === 0) {
+                mysqli_query($conn, "ALTER TABLE `wingo_api_config` ADD COLUMN `" . $__fu . "` INT NOT NULL DEFAULT 0");
             }
         }
     }
@@ -367,12 +380,25 @@ if (!defined('WINGO_API_LIB')) {
             }
         }
 
-        /* 3) circuit breaker FIRST — even force-fresh attempts must stop
-              hammering a failing API (403s / timeouts / dead host) */
+        /* 3) circuit breaker — process-local AND PERSISTED (v5).
+              A dead API must be curled at most once/60s GLOBALLY:
+              the persisted fail_until_XX survives across processes, so the
+              5-second settle tick never wastes 1-2s per game on curls that
+              cannot succeed (this was freezing game history for 10-20s). */
+        $streakCol = 'fail_streak_' . $gameKey;
+        $untilCol  = 'fail_until_' . $gameKey;
+        $haveBreakerCols = array_key_exists($untilCol, $cfg);
         if (!isset($breaker[$gameKey])) $breaker[$gameKey] = ['fails' => 0, 'last' => 0];
         if ($breaker[$gameKey]['fails'] >= 3 && ($nowTs - $breaker[$gameKey]['last']) < 60) {
             $data = $fail;
             $data['error'] = 'circuit-open (API unreachable, retrying later)';
+            $cache[$gameKey] = ['t' => $nowTs, 'data' => $data];
+            return $data;
+        }
+        if ($haveBreakerCols && intval($cfg[$untilCol]) > $nowTs) {
+            $data = $fail;
+            $data['error'] = 'circuit-open (persisted; API failing, auto-retry in '
+                . (intval($cfg[$untilCol]) - $nowTs) . 's)';
             $cache[$gameKey] = ['t' => $nowTs, 'data' => $data];
             return $data;
         }
@@ -411,11 +437,13 @@ if (!defined('WINGO_API_LIB')) {
         if ($ok) {
             $breaker[$gameKey]['fails'] = 0;
             /* publish the fresh feed into the shared DB cache so every
-               other process (GetGameIssue / cron / fast loop) reuses it */
+               other process (GetGameIssue / cron / fast loop) reuses it;
+               also reset the PERSISTED breaker (v5) */
             if ($haveDbCols) {
                 mysqli_query($conn, "UPDATE `wingo_api_config` SET
                     `" . $colJson . "` = '" . mysqli_real_escape_string($conn, strval($raw)) . "',
-                    `" . $colAt . "` = " . intval(time()) . "
+                    `" . $colAt . "` = " . intval(time())
+                    . ($haveBreakerCols ? ", `" . $streakCol . "` = 0, `" . $untilCol . "` = 0" : "") . "
                     WHERE id = 1");
             }
             $success = ['ok' => true, 'candidates' => $candidates, 'raw' => strval($raw),
@@ -426,6 +454,18 @@ if (!defined('WINGO_API_LIB')) {
 
         $breaker[$gameKey]['fails']++;
         $breaker[$gameKey]['last'] = time();
+        /* persist the failure (v5): streak++ and open the circuit for 60s
+           after 3 consecutive fails; feed_at marks the attempt so the
+           cross-process politeness gap also applies to failures */
+        if ($haveBreakerCols) {
+            $streak = intval($cfg[$streakCol]) + 1;
+            $until  = ($streak >= 3) ? (intval(time()) + 60) : 0;
+            mysqli_query($conn, "UPDATE `wingo_api_config` SET
+                `" . $streakCol . "` = " . $streak . ",
+                `" . $untilCol . "` = " . $until . ",
+                `" . $colAt . "` = " . intval(time()) . "
+                WHERE id = 1");
+        }
         $data = $fail;
         $data['error'] = 'direct fetch failed: HTTP ' . $httpCode .
             ($cerrno ? ' curl#' . $cerrno : '') . ' (' . $latency . 'ms)';
