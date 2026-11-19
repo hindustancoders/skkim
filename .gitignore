@@ -7,7 +7,7 @@ code/.last_*
 # Local-only artifacts (deployment/testing)
 dbdata/
 bharatgames_deploy_v2.zip
-bhar42501_SQL_full_dump.sql
+/bhar42501_SQL_full_dump.sql
 .testtoken
 run_ssr_loop.sh
 deploy_staging/
