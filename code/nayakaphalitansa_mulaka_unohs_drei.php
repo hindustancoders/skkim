@@ -65,6 +65,8 @@
                                 wingo_api_log_event($conn, '3m', $samasyesreni['atadaaidi'], null, $kadimesucyanka, null, 'manual', 'Admin prediction applied');
                         } else {
                                 $__wingo_api = wingo_api_resolve($conn, '3m', $samasyesreni['atadaaidi']);
+
+                                if (is_array($__wingo_api) && ($__wingo_api['status'] ?? '') === 'wait') { return; /* API healthy, issue not published yet -> retry next tick */ }
                                 if (is_array($__wingo_api) && $__wingo_api['number'] !== null) {
                                         $kadimesucyanka = (int)$__wingo_api['number'];
                                 }
@@ -605,6 +607,8 @@
                                 wingo_api_log_event($conn, '3m', $samasyesreni['atadaaidi'], null, $yadrcchika, null, 'manual', 'Admin prediction applied (no bets)');
                         } else {
                                 $__wingoApiRes = wingo_api_resolve($conn, '3m', $samasyesreni['atadaaidi']);
+
+                                if (is_array($__wingoApiRes) && ($__wingoApiRes['status'] ?? '') === 'wait') { return; /* API healthy, issue not published yet -> retry next tick */ }
                                 if (is_array($__wingoApiRes) && $__wingoApiRes['number'] !== null) {
                                         $yadrcchika = (int)$__wingoApiRes['number'];
                                 }

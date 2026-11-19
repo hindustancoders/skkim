@@ -83,6 +83,20 @@ if (!defined('WINGO_API_LIB')) {
             KEY `idx_created` (`created_at`),
             KEY `idx_game` (`game_key`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        /* v4 migration: per-game shared feed cache columns (cross-process,
+           so GetGameIssue / cron / fast loop all reuse one fetch) */
+        foreach (['30s','1m','3m','5m','10m'] as $__gk) {
+            $__cj = 'feed_json_' . $__gk;
+            $__ca = 'feed_at_' . $__gk;
+            $r1 = mysqli_query($conn, "SHOW COLUMNS FROM `wingo_api_config` LIKE '" . $__cj . "'");
+            if ($r1 && mysqli_num_rows($r1) === 0) {
+                mysqli_query($conn, "ALTER TABLE `wingo_api_config` ADD COLUMN `" . $__cj . "` MEDIUMTEXT NULL");
+            }
+            $r2 = mysqli_query($conn, "SHOW COLUMNS FROM `wingo_api_config` LIKE '" . $__ca . "'");
+            if ($r2 && mysqli_num_rows($r2) === 0) {
+                mysqli_query($conn, "ALTER TABLE `wingo_api_config` ADD COLUMN `" . $__ca . "` INT NULL DEFAULT 0");
+            }
+        }
     }
 
     /* ---------------------------------------------------------
@@ -301,10 +315,12 @@ if (!defined('WINGO_API_LIB')) {
     }
 
     /* ---------------------------------------------------------
-     * HTTP fetch — DIRECT ONLY (v3, no proxies).
-     * One short-timeout attempt per call; results cached 6s per
-     * game; circuit breaker opens for 60s after 3 consecutive
-     * failures so the cron loop NEVER hangs on an unreachable API.
+     * HTTP fetch — DIRECT ONLY (v4, no proxies).
+     * One short-timeout attempt per call. Fresh feed cached 6s:
+     * first in a DB row (shared across ALL processes — GetGameIssue,
+     * cron_master and the fast loop reuse the same fetch), then in a
+     * per-process static. Circuit breaker opens for 60s after 3
+     * consecutive failures so nothing ever hangs on a dead API.
      * Returns: ['ok','candidates','raw','latency_ms','error']
      * --------------------------------------------------------- */
     function wingo_api_fetch_feed($conn, $gameKey, $forceFresh = false) {
@@ -324,15 +340,48 @@ if (!defined('WINGO_API_LIB')) {
         $sep = (strpos($base, '?') === false) ? '?' : '&';
         $url = $base . $sep . 'type=' . urlencode($typeParam) . '&api_key=' . urlencode($key);
 
-        if (!$forceFresh && isset($cache[$gameKey]) && (time() - $cache[$gameKey]['t']) < 6) {
+        $colJson = 'feed_json_' . $gameKey;
+        $colAt   = 'feed_at_' . $gameKey;
+        $haveDbCols = array_key_exists($colAt, $cfg);
+        $nowTs = time();
+
+        /* dynamic TTL: the feed only changes once per interval, so cache
+           half-interval (min 8s). Keeps request volume far below rate
+           limits while staying fresh for every new issueNumber. */
+        $ttl = max(8, intval(wingo_api_interval_of($gameKey) / 2));
+
+        /* 1) process-local cache (cheapest) */
+        if (!$forceFresh && isset($cache[$gameKey]) && ($nowTs - $cache[$gameKey]['t']) < $ttl) {
             return $cache[$gameKey]['data'];
         }
 
+        /* 2) shared DB cache (cross-process; keeps GetGameIssue polling cheap) */
+        if (!$forceFresh && $haveDbCols && intval($cfg[$colAt]) > 0
+                && ($nowTs - intval($cfg[$colAt])) < $ttl && !empty($cfg[$colJson])) {
+            $cand = wingo_api_parse_feed($cfg[$colJson]);
+            if (count($cand) > 0) {
+                $data = ['ok' => true, 'candidates' => $cand, 'raw' => '',
+                         'latency_ms' => 0, 'error' => null];
+                $cache[$gameKey] = ['t' => $nowTs, 'data' => $data];
+                return $data;
+            }
+        }
+
+        /* 3) circuit breaker FIRST — even force-fresh attempts must stop
+              hammering a failing API (403s / timeouts / dead host) */
         if (!isset($breaker[$gameKey])) $breaker[$gameKey] = ['fails' => 0, 'last' => 0];
-        if (!$forceFresh && $breaker[$gameKey]['fails'] >= 3 && (time() - $breaker[$gameKey]['last']) < 60) {
+        if ($breaker[$gameKey]['fails'] >= 3 && ($nowTs - $breaker[$gameKey]['last']) < 60) {
             $data = $fail;
             $data['error'] = 'circuit-open (API unreachable, retrying later)';
-            $cache[$gameKey] = ['t' => time(), 'data' => $data];
+            $cache[$gameKey] = ['t' => $nowTs, 'data' => $data];
+            return $data;
+        }
+
+        /* 4) politeness gap: never curl the API more than once per 4s
+              per game, even when multiple processes force-fresh at once */
+        if ($haveDbCols && ($nowTs - intval($cfg[$colAt])) < 4) {
+            $data = $fail;
+            $data['error'] = 'min-gap (politeness, last attempt ' . ($nowTs - intval($cfg[$colAt])) . 's ago)';
             return $data;
         }
 
@@ -361,6 +410,14 @@ if (!defined('WINGO_API_LIB')) {
 
         if ($ok) {
             $breaker[$gameKey]['fails'] = 0;
+            /* publish the fresh feed into the shared DB cache so every
+               other process (GetGameIssue / cron / fast loop) reuses it */
+            if ($haveDbCols) {
+                mysqli_query($conn, "UPDATE `wingo_api_config` SET
+                    `" . $colJson . "` = '" . mysqli_real_escape_string($conn, strval($raw)) . "',
+                    `" . $colAt . "` = " . intval(time()) . "
+                    WHERE id = 1");
+            }
             $success = ['ok' => true, 'candidates' => $candidates, 'raw' => strval($raw),
                         'latency_ms' => $latency, 'error' => null];
             $cache[$gameKey] = ['t' => time(), 'data' => $success];
@@ -403,19 +460,30 @@ if (!defined('WINGO_API_LIB')) {
     /* ---------------------------------------------------------
      * MAIN RESOLVER — returns number + colour from the API for a
      * local period. The local period id IS the API issueNumber
-     * (same scheme), so matching is exact-string. If the feed has
-     * not published the slot yet, retry once fresh, then give up
-     * (caller falls back to the auto algorithm — never stalls,
-     * never applies a wrong period's number).
-     * Return: ['number'=>int, 'colour'=>str|null, 'api_period'=>str, 'status'=>'used']
-     *         or null (use fallback algorithm)
+     * (same scheme), so matching is exact-string.
+     *
+     * v4 FAST+CORRECT (non-blocking): while the API is healthy but
+     * has not yet published this slot's issueNumber, the caller is
+     * told to WAIT and retries on the next fast tick (~5s) until
+     * the grace window (slot end + 20s) passes. Never stalls:
+     *   - API feed down            -> immediate fallback algorithm
+     *   - grace window expired     -> fallback algorithm
+     *   - issue not published yet  -> ['status'=>'wait'] (no block)
+     * Return: ['number'=>int,'colour'=>str|null,'api_period'=>str,'status'=>'used']
+     *      or ['status'=>'wait'] (caller skips settlement this tick)
+     *      or null (use fallback algorithm)
      * --------------------------------------------------------- */
-    function wingo_api_resolve($conn, $gameKey, $localPeriodId) {
+    function wingo_api_interval_of($gameKey) {
+        $map = ['30s' => 30, '1m' => 60, '3m' => 180, '5m' => 300, '10m' => 600];
+        return isset($map[$gameKey]) ? $map[$gameKey] : 60;
+    }
+
+    function wingo_api_resolve($conn, $gameKey, $localPeriodId, $graceSec = 20) {
         $cfg = wingo_api_get_config($conn);
         if (!wingo_api_game_enabled($cfg, $gameKey)) return null;
 
         $localPeriodId = strval($localPeriodId);
-        $fetch = wingo_api_fetch_feed($conn, $gameKey);
+        $fetch = wingo_api_fetch_feed($conn, $gameKey, true);
 
         if ($fetch['ok']) {
             foreach ($fetch['candidates'] as $c) {
@@ -425,23 +493,37 @@ if (!defined('WINGO_API_LIB')) {
                     return ['number' => $c['number'], 'colour' => $c['colour'], 'api_period' => $c['period'], 'status' => 'used'];
                 }
             }
-            // feed may lag a few seconds behind the slot end -> one fresh retry
-            sleep(2);
-            $retry = wingo_api_fetch_feed($conn, $gameKey, true);
-            if ($retry['ok']) {
-                foreach ($retry['candidates'] as $c) {
-                    if ($c['period'] !== null && strcasecmp($c['period'], $localPeriodId) === 0) {
-                        wingo_api_log_event($conn, $gameKey, $localPeriodId, $c['period'], $c['number'], $c['colour'],
-                            'used', 'API result applied after retry', $retry['latency_ms']);
-                        return ['number' => $c['number'], 'colour' => $c['colour'], 'api_period' => $c['period'], 'status' => 'used'];
-                    }
-                }
+            /* feed healthy but this issue not published yet:
+               wait (grace window from slot end) instead of publishing
+               a wrong local result — caller retries next tick */
+            $slot = wingo_api_slot_times($localPeriodId, wingo_api_interval_of($gameKey), $gameKey);
+            $deadline = ($slot !== null) ? $slot['end'] + $graceSec : time() + 10;
+            if (time() < $deadline) {
+                wingo_api_log_event($conn, $gameKey, $localPeriodId, null, null, null, 'wait',
+                    'API feed healthy, issueNumber ' . $localPeriodId . ' not published yet (grace until ' . date('H:i:s', $deadline) . ')', $fetch['latency_ms']);
+                return ['status' => 'wait'];
             }
+            wingo_api_log_event($conn, $gameKey, $localPeriodId, null, null, null, 'fallback',
+                'API grace window expired without issueNumber ' . $localPeriodId . '; auto algorithm used', $fetch['latency_ms']);
+            return null;
         }
 
+        /* feed fetch failed — decide: wait (throttled/unknown) or fallback (API really down) */
+        $errStr = strval($fetch['error']);
+        if (strpos($errStr, 'min-gap') === 0) {
+            /* just politeness-throttled: state unknown -> retry next tick (grace-bounded) */
+            $slot = wingo_api_slot_times($localPeriodId, wingo_api_interval_of($gameKey), $gameKey);
+            $deadline = ($slot !== null) ? $slot['end'] + $graceSec : time() + 10;
+            if (time() < $deadline) {
+                return ['status' => 'wait'];
+            }
+            wingo_api_log_event($conn, $gameKey, $localPeriodId, null, null, null, 'fallback',
+                'grace expired while feed throttled; auto algorithm used', $fetch['latency_ms']);
+            return null;
+        }
+        /* feed DOWN (curl error / HTTP error / circuit open) -> never wait on a dead API */
         wingo_api_log_event($conn, $gameKey, $localPeriodId, null, null, null, 'fallback',
-            'API issueNumber not found for period ' . $localPeriodId . ' (' . ($fetch['ok'] ? 'feed ok' : 'feed failed: ' . $fetch['error']) . '); auto algorithm used',
-            $fetch['latency_ms']);
+            'API feed failed (' . $errStr . '); auto algorithm used', $fetch['latency_ms']);
         return null;
     }
 
@@ -480,5 +562,138 @@ if (!defined('WINGO_API_LIB')) {
             return null;                        // ascending order: first not-due => none due
         }
         return null;
+    }
+
+    /* ---------------------------------------------------------
+     * WALL-CLOCK SLOT — the period id the given game should have
+     * OPEN right now, using exactly the same scheme as the API
+     * issueNumber series (+1 per interval):
+     *   30s -> date(UTC)+"10005"+serial  (serial = slot of UTC day)
+     *   1m  -> "10001", 3m -> "10002", 5m -> "10003"  (UTC)
+     *   10m -> legacy IST scheme "10004" (unchanged, no API feed)
+     * --------------------------------------------------------- */
+    function wingo_api_wallclock_slot($gameKey) {
+        switch ($gameKey) {
+            case '30s': $pfx = '10005'; $iv = 30;  $max = 2880; $utc = true;  break;
+            case '1m':  $pfx = '10001'; $iv = 60;  $max = 1440; $utc = true;  break;
+            case '3m':  $pfx = '10002'; $iv = 180; $max = 480;  $utc = true;  break;
+            case '5m':  $pfx = '10003'; $iv = 300; $max = 288;  $utc = true;  break;
+            case '10m': $pfx = '10004'; $iv = 600; $max = 144;  $utc = false; break;
+            default: return null;
+        }
+        if ($utc) {
+            $date = gmdate('Ymd');
+            $secs = intval(gmdate('H')) * 3600 + intval(gmdate('i')) * 60 + intval(gmdate('s'));
+        } else {
+            $date = date('Ymd');
+            $secs = intval(date('H')) * 3600 + intval(date('i')) * 60 + intval(date('s'));
+        }
+        $serial = intval(floor($secs / $iv)) + 1;
+        if ($serial > $max) $serial = $max;
+        return ['period' => $date . $pfx . sprintf("%04d", $serial), 'interval' => $iv];
+    }
+
+    /* ---------------------------------------------------------
+     * SELF-HEALING OPEN PERIOD (v4 core fix).
+     * Guarantees the currently-OPEN betting period always exists,
+     * follows the +1 rule (open = latest published issueNumber + 1,
+     * or wall-clock last + 1 when the API is unavailable) and NEVER
+     * leaves an expired/settled period on top of the table. Used by
+     * GetGameIssue (instant countdown flip at every boundary, all
+     * durations 30s/1m/3m/5m/10m) and by the cron creators — one
+     * single source of truth.
+     *
+     * Safe to call from any process / any frequency:
+     *   GET_LOCK serialises writers, inserts are +1 chained, backfill
+     *   is capped, and forward rows (API ahead) are never rewound.
+     * Returns the open period id (string) or null on lock failure.
+     * --------------------------------------------------------- */
+    function wingo_api_ensure_open_period($conn, $gameKey, $periodsTable, $manualTable) {
+        $slot = wingo_api_wallclock_slot($gameKey);
+        if ($slot === null) return null;
+
+        /* ---- open target = wall-clock slot, or API latest + 1 when ahead ---- */
+        $target = $slot['period'];
+        $cfg = wingo_api_get_config($conn);
+        if (wingo_api_game_enabled($cfg, $gameKey)) {
+            $feed = wingo_api_fetch_feed($conn, $gameKey);
+            if ($feed['ok'] && count($feed['candidates']) > 0) {
+                $latest = $feed['candidates'][0]['period'];
+                if ($latest !== null && preg_match('/^\d{17}$/', strval($latest))) {
+                    $apiOpen = wingo_api_next_issue($latest);
+                    if ($apiOpen !== null && strcasecmp($apiOpen, $target) > 0) {
+                        $target = $apiOpen;     // API ahead of local clock -> follow the API
+                    }
+                }
+            }
+        }
+
+        $safeTable  = preg_replace('/[^a-zA-Z0-9_]/', '', $periodsTable);
+        $safeManual = preg_replace('/[^a-zA-Z0-9_]/', '', $manualTable);
+        $safeRes    = str_replace('_periods_', '_results_', $safeTable);
+        $lockName   = 'wingo_open_' . preg_replace('/[^a-z0-9]/i', '', $gameKey);
+
+        $lockOk = mysqli_query($conn, "SELECT GET_LOCK('" . $lockName . "', 3) AS l");
+        $lockRow = $lockOk ? mysqli_fetch_assoc($lockOk) : null;
+        if (!$lockRow || intval($lockRow['l']) !== 1) return null;   // another writer mid-flight
+
+        $dekh = mysqli_query($conn, "SELECT atadaaidi FROM `" . $safeTable . "` ORDER BY kramasankhye DESC LIMIT 1");
+        $lastId = null;
+        if ($dekh && mysqli_num_rows($dekh) > 0) {
+            $r = mysqli_fetch_array($dekh);
+            $lastId = strval($r['atadaaidi']);
+        }
+        $tarika = date('Y-m-d H:i:s');
+        $now = time();
+        $inserted = false;
+
+        if ($lastId === null || strlen($lastId) != 17 || !ctype_digit($lastId)) {
+            /* no usable row -> start the day/scheme fresh */
+            mysqli_query($conn, "TRUNCATE TABLE `" . $safeTable . "`");
+            mysqli_query($conn, "INSERT INTO `" . $safeTable . "` (`atadaaidi`, `dinankavannuracisi`) VALUES ('" . $target . "', '" . $tarika . "')");
+            $lastId = $target;
+            $inserted = true;
+        } else if (strcasecmp($lastId, $target) < 0) {
+            /* behind the open target -> backfill every missed slot (+1 each) */
+            $cur = $lastId;
+            $filled = 0;
+            while ($filled < 20) {
+                $nxt = wingo_api_next_issue($cur);
+                if ($nxt === null || strcasecmp($nxt, $target) > 0) break;
+                mysqli_query($conn, "INSERT INTO `" . $safeTable . "` (`atadaaidi`, `dinankavannuracisi`) VALUES ('" . $nxt . "', '" . $tarika . "')");
+                $cur = $nxt;
+                $inserted = true;
+                $filled++;
+                if (strcasecmp($cur, $target) === 0) break;
+            }
+            $lastId = $cur;
+        } else if (strcasecmp($lastId, $target) === 0) {
+            /* current wall-clock slot on top: if its window is already
+               over (or already settled) open the NEXT period (+1) so the
+               countdown never sticks on a finished period */
+            $st = wingo_api_slot_times($lastId, $slot['interval'], $gameKey);
+            $expired = ($st !== null && $st['end'] <= $now);
+            $settled = false;
+            if (!$expired) {
+                $rc = mysqli_query($conn, "SELECT 1 FROM `" . $safeRes . "` WHERE `kalaparichaya`='" . $lastId . "' LIMIT 1");
+                if ($rc && mysqli_num_rows($rc) > 0) $settled = true;
+            }
+            if ($expired || $settled) {
+                $nxt = wingo_api_next_issue($lastId);
+                if ($nxt !== null) {
+                    mysqli_query($conn, "INSERT INTO `" . $safeTable . "` (`atadaaidi`, `dinankavannuracisi`) VALUES ('" . $nxt . "', '" . $tarika . "')");
+                    $lastId = $nxt;
+                    $inserted = true;
+                }
+            }
+        }
+        /* lastId > target (API ahead) -> keep the API-driven row as-is */
+
+        if ($inserted) {
+            /* new open period begins: clear stale manual predictions */
+            mysqli_query($conn, "UPDATE `" . $safeManual . "` SET sthiti='0'");
+        }
+        mysqli_query($conn, "SELECT RELEASE_LOCK('" . $lockName . "')");
+        return $lastId;
     }
 }

@@ -57,6 +57,25 @@
                                                 ];
                                                 if (isset($wingoTypes[$typeId])) {
                                                         $wt = $wingoTypes[$typeId];
+
+                                                        /* === WINGO v4 SELF-HEAL (the +1 rule) ===
+                                                           Make sure the OPEN period always exists and is
+                                                           exactly latest settled period + 1: if the top
+                                                           periods row expired (slot ended) or is already
+                                                           settled, open the next period RIGHT NOW instead
+                                                           of waiting for the cron. This keeps the countdown
+                                                           running fast at every boundary for 30s/1m/3m/5m. */
+                                                        if (function_exists('wingo_api_ensure_open_period')) {
+                                                                $manualMap = [
+                                                                        '30s' => 'wingo_manual_result_30sec',
+                                                                        '1m'  => 'wingo_manual_result_1min',
+                                                                        '3m'  => 'wingo_manual_result_3min',
+                                                                        '5m'  => 'wingo_manual_result_5min',
+                                                                        '10m' => 'wingo_manual_result_10min',
+                                                                ];
+                                                                wingo_api_ensure_open_period($conn, $wt['gk'], $wt['table'], $manualMap[$wt['gk']]);
+                                                        }
+
                                                         $samasye = "SELECT atadaaidi, dinankavannuracisi
                                                           FROM `" . $wt['table'] . "`
                                                           ORDER BY kramasankhye DESC LIMIT 1";

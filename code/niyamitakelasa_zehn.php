@@ -1,49 +1,18 @@
-<?php 
+<?php
     include("serive/samparka.php");
-    include("nayakaphalitansa_mulaka_unohs_zehn.php");
+    include_once("wingo_api_lib.php");
 
     /* =========================================================
-     * WinGo 10 Min — local IST scheme (no external API endpoint)
+     * WinGo 10 Min — open period creator (v4, shared engine)
      * Period id: IST YYYYMMDD + 10004 + 4-digit serial (1..144)
      * serial = floor(seconds_of_IST_day / 600) + 1  (1-based slot)
-     * (prefix 10005 now belongs to the 30s API scheme, so 10m
-     *  uses the free 10004 prefix to avoid id collisions)
+     * (prefix 10005 belongs to the 30s API scheme, so 10m uses the
+     *  free 10004 prefix to avoid id collisions; no external API
+     *  endpoint for 10m — en_10m stays off by default)
+     * Missed slots backfilled +1 in order; expired/settled top row
+     * advances instantly so the countdown never sticks.
      * ========================================================= */
-    $tarika = date('Y-m-d H:i:s');
-    $dinank = date('Ymd');
-    $secsToday = intval(date('H')) * 3600 + intval(date('i')) * 60 + intval(date('s'));
-    $serial = intval(floor($secsToday / 600)) + 1;
-    if ($serial > 144) $serial = 144;
-    $expected = $dinank . "10004" . sprintf("%04d", $serial);
+    wingo_api_ensure_open_period($conn, '10m', 'wingo_periods_10min', 'wingo_manual_result_10min');
 
-    $lockOk = mysqli_query($conn, "SELECT GET_LOCK('wingo10min_period', 3) AS l");
-    $lockRow = $lockOk ? mysqli_fetch_assoc($lockOk) : null;
-    $haveLock = ($lockRow && intval($lockRow['l']) === 1);
-
-    if ($haveLock) {
-        $dekhakalakrama = mysqli_query($conn, "SELECT atadaaidi FROM `wingo_periods_10min` ORDER BY kramasankhye DESC LIMIT 1");
-        $kaladhadi = mysqli_num_rows($dekhakalakrama);
-        $kalakramadhadi = mysqli_fetch_array($dekhakalakrama);
-        $lastId = ($kaladhadi > 0) ? strval($kalakramadhadi['atadaaidi']) : null;
-        $lastDate = ($lastId !== null && strlen($lastId) >= 8) ? substr($lastId, 0, 8) : null;
-
-        $nayiRow = false;
-        if ($lastId === null || strlen($lastId) != 17) {
-            mysqli_query($conn, "TRUNCATE TABLE `wingo_periods_10min`");
-            mysqli_query($conn, "INSERT INTO `wingo_periods_10min` (`atadaaidi`, `dinankavannuracisi`) VALUES ('$expected', '$tarika')");
-            $nayiRow = true;
-        } else if ($lastDate != $dinank) {
-            mysqli_query($conn, "TRUNCATE TABLE `wingo_periods_10min`");
-            mysqli_query($conn, "INSERT INTO `wingo_periods_10min` (`atadaaidi`, `dinankavannuracisi`) VALUES ('$expected', '$tarika')");
-            $nayiRow = true;
-        } else if ($lastId < $expected) {
-            mysqli_query($conn, "INSERT INTO `wingo_periods_10min` (`atadaaidi`, `dinankavannuracisi`) VALUES ('$expected', '$tarika')");
-            $nayiRow = true;
-        }
-
-        if ($nayiRow) {
-            mysqli_query($conn, "UPDATE wingo_manual_result_10min SET sthiti='0'");
-        }
-        mysqli_query($conn, "SELECT RELEASE_LOCK('wingo10min_period')");
-    }
+    include("nayakaphalitansa_mulaka_unohs_zehn.php");
 ?>

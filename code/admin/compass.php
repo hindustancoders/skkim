@@ -146,7 +146,8 @@
                 <li class="nav-item"> <a class="nav-link" href="qwackpay_accounts.php"><i class="fa fa-university"></i> QwackPay Accounts</a></li>
                 <li class="nav-item"> <a class="nav-link" href="watchpay_payouts.php?gateway=qwackpay"><i class="fa fa-money"></i> QwackPay Payouts</a></li>
                 <li class="nav-item"> <a class="nav-link" href="manage_banners.php"><i class="fa fa-image"></i> Banner Manager</a></li>
-                <li class="nav-item"> <a class="nav-link" href="manage_popups.php"><i class="fa fa-bullhorn"></i> Popup Notices</a></li>
+                <li class="nav-item"> <a class="nav-link" href="manage_notices.php"><i class="fa fa-bullhorn"></i> Site Notices (Top Bar)</a></li>
+                <li class="nav-item"> <a class="nav-link" href="manage_popups.php"><i class="fa fa-comment-o"></i> Popup Notices</a></li>
                 <li class="nav-item"> <a class="nav-link" href="chat.php"><i class="fa fa-comments"></i> User Chat</a></li>
                 <li class="nav-item"> <a class="nav-link" href="audit_log.php"><i class="fa fa-history"></i> Audit Log</a></li>
                 <li class="nav-item"> <a class="nav-link" href="export_reports.php"><i class="fa fa-download"></i> Export Reports</a></li>

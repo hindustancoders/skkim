@@ -49,13 +49,19 @@
 				else{
 							$data = '';
 						}
-						
-					$data = $data . '<div style="display: flex; justify-content: center; align-items: center; width: 100%; text-align: center; padding: 10px; box-sizing: border-box;">
-                   <div style="width: 100%; max-width: 300px; border: 1px solid #000; overflow: hidden;">
-                       <img src="/uploads/pub-628304d7b25d454abf303bfafba6a2e0.r2.dev/ALADDINN/editor/moregamecommingsone.jpg" style="width: 100%; height: auto; display: block; margin: 0 auto;">
-                   </div>
-                 </div>';
-
+						/* === v4: DB-driven notice detail (admin/manage_notices.php) ===
+						   Shows the first ACTIVE site notice; with no active notice
+						   (admin toggle off) nothing is displayed. */
+						$__noticeHtml = '';
+						$__nres = mysqli_query($conn, "SELECT title, content FROM site_notices WHERE status = 1 ORDER BY sort_order ASC, id ASC LIMIT 1");
+						if ($__nres && mysqli_num_rows($__nres) > 0) {
+								$__nrow = mysqli_fetch_assoc($__nres);
+								$__noticeHtml = '<div style="padding:14px 10px; text-align:center; font-size:15px; line-height:1.6; color:#333; white-space:pre-line;">'
+										. '<b style="font-size:17px;">' . htmlspecialchars($__nrow['title']) . '</b><br>'
+										. htmlspecialchars($__nrow['content'])
+										. '</div>';
+						}
+						$data = $data . $__noticeHtml;
 
 						
 						$res['data'] = $data;

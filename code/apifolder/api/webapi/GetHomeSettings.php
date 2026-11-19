@@ -35,7 +35,7 @@
 				$data['projectName'] = 'Bharat Games';
 				$data['projectLogo'] = '/logo.png';
 				$data['languages'] = 'en|hd';
-				$data['webIco'] = '/ar058@192.png';
+				$data['webIco'] = '/icons/icon-192.png';
 				$data['headLogo'] = '/logo.png';
 				$data['dollarSign'] = '₹';
 				$data['upperOrLower'] = '0';
